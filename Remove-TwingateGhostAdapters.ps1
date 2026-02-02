@@ -29,13 +29,36 @@ if ($RemoveInstanceIds) {
         }
     }
     Write-Host ""
-    if ($failed -eq 0) {
-        Write-Host "All ghost Twingate adapters removed successfully." -ForegroundColor Green
-    } else {
+    if ($failed -gt 0) {
         Write-Host "$failed adapter(s) could not be removed." -ForegroundColor Red
+        Read-Host "`nPress Enter to close"
+        exit $failed
     }
+
+    Write-Host "All ghost Twingate adapters removed successfully.`n" -ForegroundColor Green
+
+    # Restart Twingate and connect
+    Write-Host "Restarting Twingate client..." -ForegroundColor Cyan
+    Start-Process "C:\Program Files\Twingate\Twingate.exe"
+    Start-Sleep -Seconds 3
+
+    for ($i = 1; $i -le 5; $i++) {
+        Write-Host "Connection attempt $i of 5..." -ForegroundColor Cyan
+        Start-Process "twingate://connect?network=inlumi.twingate.com"
+        Start-Sleep -Seconds 15
+
+        $adapter = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
+            Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -eq "OK" }
+        if ($adapter) {
+            Write-Host "`nYour Twingate is fixed!!!`n" -ForegroundColor Green
+            Read-Host "Press Enter to close"
+            exit 0
+        }
+    }
+
+    Write-Host "`nCould not verify connection after 5 attempts." -ForegroundColor Red
     Read-Host "`nPress Enter to close"
-    exit $failed
+    exit 1
 }
 
 # --- Main flow (no admin required for scanning) ---
@@ -140,10 +163,22 @@ if (-not $ghostAdapters -or $ghostAdapters.Count -eq 0) {
         Write-Host "Restarting Twingate client..." -ForegroundColor Cyan
         Start-Process "C:\Program Files\Twingate\Twingate.exe"
         Start-Sleep -Seconds 3
-        Write-Host "Connecting to inlumi.twingate.com..." -ForegroundColor Cyan
-        Start-Process "twingate://connect?network=inlumi.twingate.com"
-        Write-Host "Twingate client started and connection initiated.`n" -ForegroundColor Green
-        exit 0
+
+        for ($i = 1; $i -le 5; $i++) {
+            Write-Host "Connection attempt $i of 5..." -ForegroundColor Cyan
+            Start-Process "twingate://connect?network=inlumi.twingate.com"
+            Start-Sleep -Seconds 15
+
+            $adapter = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
+                Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -eq "OK" }
+            if ($adapter) {
+                Write-Host "`nYour Twingate is fixed!!!`n" -ForegroundColor Green
+                exit 0
+            }
+        }
+
+        Write-Host "`nCould not verify connection after 5 attempts." -ForegroundColor Red
+        exit 1
     }
 
     # Ghost adapters found after stopping — continue to removal prompt
