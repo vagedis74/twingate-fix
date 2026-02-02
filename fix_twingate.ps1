@@ -114,7 +114,8 @@ if ($twingateApp) {
     Write-Host "Uninstalling Twingate silently..." -ForegroundColor Yellow
     $uninstallProc = Start-Process msiexec -ArgumentList "/x $($twingateApp.PSChildName) /qn" -Wait -PassThru
     if ($uninstallProc.ExitCode -ne 0) {
-        Write-Host "Uninstall failed (exit code $($uninstallProc.ExitCode))." -ForegroundColor Red
+        $ec = $uninstallProc.ExitCode
+        Write-Host "Uninstall failed with exit code $ec." -ForegroundColor Red
         Start-Sleep -Seconds 10
         exit 1
     }
@@ -145,7 +146,8 @@ if (Test-Path $cleanupScript) {
         "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
     ) -PassThru -Wait
     if ($proc.ExitCode -ne 0) {
-        Write-Host "Cleanup script failed (exit code $($proc.ExitCode))." -ForegroundColor Red
+        $ec = $proc.ExitCode
+        Write-Host "Cleanup script failed with exit code $ec." -ForegroundColor Red
         Start-Sleep -Seconds 5
         exit 1
     }
@@ -224,8 +226,9 @@ if ($PostReboot) {
 
         Write-Host "Downloading .NET 8 Desktop Runtime..." -ForegroundColor Yellow
         & curl.exe -L -o $dotnetPath $dotnetUrl
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Download failed (exit code $($LASTEXITCODE))." -ForegroundColor Red
+        $ec = $LASTEXITCODE
+        if ($ec -ne 0) {
+            Write-Host "Download failed with exit code $ec." -ForegroundColor Red
             Write-Host "Please download manually from: $dotnetUrl" -ForegroundColor Yellow
             Start-Sleep -Seconds 5
             exit 1
@@ -241,7 +244,8 @@ if ($PostReboot) {
         $dotnetProc = Start-Process -FilePath $dotnetPath -ArgumentList "/install /quiet /norestart" -Wait -PassThru
         # Exit code 3010 means success but reboot required — we reboot in Step 7
         if ($dotnetProc.ExitCode -ne 0 -and $dotnetProc.ExitCode -ne 3010) {
-            Write-Host "Installation failed (exit code $($dotnetProc.ExitCode))." -ForegroundColor Red
+            $ec = $dotnetProc.ExitCode
+            Write-Host "Installation failed with exit code $ec." -ForegroundColor Red
             Remove-Item $dotnetPath -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 10
             exit 1
@@ -293,8 +297,9 @@ if ($PostReboot) {
 
     Write-Host "Downloading Twingate installer..." -ForegroundColor Yellow
     & curl.exe -L -o $installerPath $installerUrl
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Download failed (exit code $($LASTEXITCODE))." -ForegroundColor Red
+    $ec = $LASTEXITCODE
+    if ($ec -ne 0) {
+        Write-Host "Download failed with exit code $ec." -ForegroundColor Red
         Write-Host "Please download manually from: $installerUrl" -ForegroundColor Yellow
         Start-Sleep -Seconds 5
         exit 1
@@ -309,7 +314,8 @@ if ($PostReboot) {
     Write-Host "Installing Twingate silently (network: inlumi.twingate.com)..." -ForegroundColor Yellow
     $installProc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /qn network=inlumi.twingate.com auto_update=true no_optional_updates=true" -Wait -PassThru
     if ($installProc.ExitCode -ne 0) {
-        Write-Host "Installation failed (exit code $($installProc.ExitCode))." -ForegroundColor Red
+        $ec = $installProc.ExitCode
+        Write-Host "Installation failed with exit code $ec." -ForegroundColor Red
         Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 10
         exit 1
@@ -525,7 +531,8 @@ if ($PostInstallReboot) {
             "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
         ) -PassThru -Wait
         if ($proc.ExitCode -ne 0) {
-            Write-Host "Cleanup script failed (exit code $($proc.ExitCode))." -ForegroundColor Red
+            $ec = $proc.ExitCode
+            Write-Host "Cleanup script failed with exit code $ec." -ForegroundColor Red
         } else {
             Write-Host "Cleanup script finished successfully." -ForegroundColor Green
         }
