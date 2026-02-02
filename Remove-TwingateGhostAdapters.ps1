@@ -53,25 +53,37 @@ if ($removed -eq 0 -and -not $ghostAdapters) {
     Write-Host "  Removed $removed ghost adapter(s).`n" -ForegroundColor Green
 }
 
-# Delete all Twingate network profiles
+# Clean up Twingate network profiles (rename active to "Twingate", delete stale)
 Write-Host "Scanning for Twingate network profiles..." -ForegroundColor Cyan
 
 $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
-$deleted = 0
+$activeProfile = Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+    Where-Object { $_.InterfaceAlias -like "*Twingate*" }
 
+if ($activeProfile -and $activeProfile.Name -ne "Twingate") {
+    Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        if ($props.ProfileName -eq $activeProfile.Name) {
+            Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate"
+            Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
+        }
+    }
+}
+
+$deleted = 0
 Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
     $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-    if ($props.ProfileName -like "Twingate*") {
+    if ($props.ProfileName -like "Twingate*" -and $props.ProfileName -ne "Twingate") {
         Remove-Item $_.PSPath -Recurse -Force
-        Write-Host "  Deleted profile '$($props.ProfileName)'" -ForegroundColor Yellow
+        Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
         $deleted++
     }
 }
 
-if ($deleted -eq 0) {
-    Write-Host "  No Twingate network profiles found.`n" -ForegroundColor Green
+if ($deleted -eq 0 -and (-not $activeProfile -or $activeProfile.Name -eq "Twingate")) {
+    Write-Host "  No stale profiles found.`n" -ForegroundColor Green
 } else {
-    Write-Host "`n  Deleted $deleted Twingate network profile(s).`n" -ForegroundColor Green
+    Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
 }
 
 Write-Host "Exiting in 5 seconds..." -ForegroundColor DarkGray

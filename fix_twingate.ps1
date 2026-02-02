@@ -152,24 +152,22 @@ if ($PostReboot) {
     # -- Step 5: Download, install and configure Twingate ------------------
     Write-Step -Number 5 -Title "Download and install Twingate silently"
 
-    # Wait for network connectivity before downloading
-    Write-Host "Waiting for network connectivity..." -ForegroundColor Yellow
-    $maxAttempts = 30
-    $attempt = 0
-    while ($attempt -lt $maxAttempts) {
-        $attempt++
-        try {
-            $null = Invoke-WebRequest -Uri "https://api.twingate.com" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-            Write-Host "Network is available." -ForegroundColor Green
-            break
-        } catch {
-            if ($attempt -ge $maxAttempts) {
-                Write-Host "Network not available after $maxAttempts attempts. Aborting." -ForegroundColor Red
-                exit 1
-            }
-            Write-Host "  Attempt $attempt/$maxAttempts - waiting 10 seconds..." -ForegroundColor DarkGray
-            Start-Sleep -Seconds 10
+    # Delete all remaining Twingate network profiles before fresh install
+    Write-Host "Removing all Twingate network profiles..." -ForegroundColor Yellow
+    $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
+    $deleted = 0
+    Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        if ($props.ProfileName -like "Twingate*") {
+            Remove-Item $_.PSPath -Recurse -Force
+            Write-Host "  Deleted profile '$($props.ProfileName)'" -ForegroundColor DarkGray
+            $deleted++
         }
+    }
+    if ($deleted -eq 0) {
+        Write-Host "  No Twingate profiles found." -ForegroundColor Green
+    } else {
+        Write-Host "  Deleted $deleted Twingate profile(s)." -ForegroundColor Green
     }
 
     $installerUrl  = "https://api.twingate.com/download/windows"
