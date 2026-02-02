@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-    Deletes all Twingate network profiles from the registry.
+    Removes ghost Twingate network adapters and deletes all Twingate network profiles.
 .DESCRIPTION
-    Finds and removes all network profiles with a name matching "Twingate*"
-    from the Windows network profile registry. Requires admin privileges.
+    Finds and removes Twingate network adapters that are not in "OK" status (ghost/phantom
+    devices) using pnputil, then deletes all Twingate* network profiles from the Windows
+    registry. Requires admin privileges.
 #>
 
 # Self-elevate if not running as admin
@@ -21,8 +22,39 @@ if (-not $isAdmin) {
     exit
 }
 
+# Remove ghost Twingate network adapters
+Write-Host "`nScanning for ghost Twingate network adapters..." -ForegroundColor Cyan
+
+$ghostAdapters = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
+    Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -ne "OK" }
+
+$removed = 0
+if ($ghostAdapters) {
+    foreach ($adapter in $ghostAdapters) {
+        Write-Host "  Removing '$($adapter.FriendlyName)' (Status: $($adapter.Status))..." -ForegroundColor Yellow
+        try {
+            pnputil /remove-device "$($adapter.InstanceId)" | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "    Removed successfully." -ForegroundColor Green
+                $removed++
+            } else {
+                Write-Host "    pnputil returned exit code $LASTEXITCODE." -ForegroundColor Red
+            }
+        } catch {
+            Write-Host "    Failed: $_" -ForegroundColor Red
+        }
+    }
+    Write-Host ""
+}
+
+if ($removed -eq 0 -and -not $ghostAdapters) {
+    Write-Host "  No ghost Twingate adapters found.`n" -ForegroundColor Green
+} else {
+    Write-Host "  Removed $removed ghost adapter(s).`n" -ForegroundColor Green
+}
+
 # Delete all Twingate network profiles
-Write-Host "`nScanning for Twingate network profiles..." -ForegroundColor Cyan
+Write-Host "Scanning for Twingate network profiles..." -ForegroundColor Cyan
 
 $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
 $deleted = 0
