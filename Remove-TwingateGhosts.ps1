@@ -44,8 +44,8 @@ if (-not $ghostAdapters) {
         Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
     }
 
-    Write-Host "`nPress space to exit..." -ForegroundColor DarkGray
-    while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
+    Write-Host "`nExiting in 5 seconds..." -ForegroundColor DarkGray
+    Start-Sleep -Seconds 5
     exit 0
 }
 
@@ -76,8 +76,8 @@ foreach ($adapter in $ghostAdapters) {
 Write-Host ""
 if ($failed -gt 0) {
     Write-Host "$failed adapter(s) could not be removed. Run as administrator." -ForegroundColor Red
-    Write-Host "Press space to exit..." -ForegroundColor DarkGray
-    while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
+    Write-Host "Exiting in 5 seconds..." -ForegroundColor DarkGray
+    Start-Sleep -Seconds 5
     exit 1
 }
 Write-Host "All ghost Twingate adapters removed.`n" -ForegroundColor Green
@@ -114,5 +114,5 @@ if ($deleted -eq 0 -and (-not $activeProfile -or $activeProfile.Name -eq "Twinga
     Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
 }
 
-Write-Host "Press space to exit..." -ForegroundColor DarkGray
-while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
+Write-Host "Exiting in 5 seconds..." -ForegroundColor DarkGray
+Start-Sleep -Seconds 5

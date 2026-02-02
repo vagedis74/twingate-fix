@@ -74,4 +74,5 @@ if ($deleted -eq 0) {
     Write-Host "`n  Deleted $deleted Twingate network profile(s).`n" -ForegroundColor Green
 }
 
-Read-Host "Press Enter to close"
+Write-Host "Exiting in 5 seconds..." -ForegroundColor DarkGray
+Start-Sleep -Seconds 5
