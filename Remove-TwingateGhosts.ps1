@@ -1,26 +1,30 @@
 <#
 .SYNOPSIS
     Detects and removes ghost Twingate network adapters.
+.NOTES
+    Requires administrator privileges. Does not self-elevate.
 #>
 
-# Scan for ghost Twingate adapters
-Write-Host "`nScanning for ghost Twingate network adapters..." -ForegroundColor Cyan
+# Warn if not running as admin
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator
+)
+if (-not $isAdmin) {
+    Write-Host "`nWARNING: This script requires administrator privileges." -ForegroundColor Red
+    Write-Host "Registry and device operations will fail without elevation.`n" -ForegroundColor Red
+}
 
-$ghostAdapters = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
-    Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -ne "OK" }
-
-if (-not $ghostAdapters) {
-    Write-Host "No ghost Twingate adapters found.`n" -ForegroundColor Green
-
-    # Clean up stale Twingate network profiles
-    Write-Host "Checking Twingate network profiles..." -ForegroundColor Cyan
+# -- Helper: clean up stale Twingate network profiles -------------------------
+function Clean-TwingateProfiles {
+    param([string]$Label = "Checking")
+    Write-Host "$Label Twingate network profiles..." -ForegroundColor Cyan
     $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
-    $activeProfile = Get-NetConnectionProfile -ErrorAction SilentlyContinue |
-        Where-Object { $_.InterfaceAlias -like "*Twingate*" }
+    $activeProfile = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+        Where-Object { $_.InterfaceAlias -like "*Twingate*" }) | Select-Object -First 1
 
     if ($activeProfile -and $activeProfile.Name -ne "Twingate") {
-        Get-ChildItem $profilesPath | ForEach-Object {
-            $props = Get-ItemProperty $_.PSPath
+        Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
+            $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
             if ($props.ProfileName -eq $activeProfile.Name) {
                 Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate"
                 Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
@@ -29,8 +33,8 @@ if (-not $ghostAdapters) {
     }
 
     $deleted = 0
-    Get-ChildItem $profilesPath | ForEach-Object {
-        $props = Get-ItemProperty $_.PSPath
+    Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
         if ($props.ProfileName -like "Twingate*" -and $props.ProfileName -ne "Twingate") {
             Remove-Item $_.PSPath -Recurse -Force
             Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
@@ -43,7 +47,17 @@ if (-not $ghostAdapters) {
     } else {
         Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
     }
+}
 
+# Scan for ghost Twingate adapters
+Write-Host "`nScanning for ghost Twingate network adapters..." -ForegroundColor Cyan
+
+$ghostAdapters = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
+    Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -ne "OK" }
+
+if (-not $ghostAdapters) {
+    Write-Host "No ghost Twingate adapters found.`n" -ForegroundColor Green
+    Clean-TwingateProfiles -Label "Checking"
     Write-Host "`nExiting in 5 seconds..." -ForegroundColor DarkGray
     Start-Sleep -Seconds 5
     exit 0
@@ -60,11 +74,11 @@ $failed = 0
 foreach ($adapter in $ghostAdapters) {
     Write-Host "Removing $($adapter.InstanceId)..." -ForegroundColor Yellow -NoNewline
     try {
-        pnputil /remove-device "$($adapter.InstanceId)" 2>&1 | Out-Null
+        $output = & pnputil /remove-device "$($adapter.InstanceId)" 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-Host " done." -ForegroundColor Green
         } else {
-            Write-Host " failed (exit code $LASTEXITCODE)." -ForegroundColor Red
+            Write-Host " failed (exit code $LASTEXITCODE): $output" -ForegroundColor Red
             $failed++
         }
     } catch {
@@ -82,37 +96,7 @@ if ($failed -gt 0) {
 }
 Write-Host "All ghost Twingate adapters removed.`n" -ForegroundColor Green
 
-# Clean up stale Twingate network profiles
-Write-Host "Cleaning up Twingate network profiles..." -ForegroundColor Cyan
-$profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
-$activeProfile = Get-NetConnectionProfile -ErrorAction SilentlyContinue |
-    Where-Object { $_.InterfaceAlias -like "*Twingate*" }
-
-if ($activeProfile -and $activeProfile.Name -ne "Twingate") {
-    Get-ChildItem $profilesPath | ForEach-Object {
-        $props = Get-ItemProperty $_.PSPath
-        if ($props.ProfileName -eq $activeProfile.Name) {
-            Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate"
-            Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
-        }
-    }
-}
-
-$deleted = 0
-Get-ChildItem $profilesPath | ForEach-Object {
-    $props = Get-ItemProperty $_.PSPath
-    if ($props.ProfileName -like "Twingate*" -and $props.ProfileName -ne "Twingate") {
-        Remove-Item $_.PSPath -Recurse -Force
-        Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
-        $deleted++
-    }
-}
-
-if ($deleted -eq 0 -and (-not $activeProfile -or $activeProfile.Name -eq "Twingate")) {
-    Write-Host "  No stale profiles found." -ForegroundColor Green
-} else {
-    Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
-}
+Clean-TwingateProfiles -Label "Cleaning up"
 
 Write-Host "Exiting in 5 seconds..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 5

@@ -76,16 +76,17 @@ Wait-Continue
 # -- Step 2: Uninstall Twingate ------------------------------------------------
 Write-Step -Number 2 -Title "Uninstall Twingate"
 
-$twingateApp = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Twingate*" }
+$twingateApp = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -like "*Twingate*" }
 
 if ($twingateApp) {
-    Write-Host "Found: $($twingateApp.Name) ($($twingateApp.Version))" -ForegroundColor Yellow
+    Write-Host "Found: $($twingateApp.DisplayName) ($($twingateApp.DisplayVersion))" -ForegroundColor Yellow
     Write-Host "Uninstalling Twingate silently..." -ForegroundColor Yellow
-    $result = $twingateApp.Uninstall()
-    if ($result.ReturnValue -eq 0) {
+    $uninstallProc = Start-Process msiexec -ArgumentList "/x $($twingateApp.PSChildName) /qn" -Wait -PassThru
+    if ($uninstallProc.ExitCode -eq 0) {
         Write-Host "Twingate uninstall complete." -ForegroundColor Green
     } else {
-        Write-Host "Uninstall returned code $($result.ReturnValue)." -ForegroundColor Red
+        Write-Host "Uninstall returned code $($uninstallProc.ExitCode)." -ForegroundColor Red
     }
 } else {
     Write-Host "Twingate is not installed (or already uninstalled)." -ForegroundColor Green
@@ -181,6 +182,11 @@ if ($PostReboot) {
         Start-Sleep -Seconds 5
         exit 1
     }
+    if (-not (Test-Path $installerPath) -or (Get-Item $installerPath).Length -eq 0) {
+        Write-Host "Downloaded file is missing or empty." -ForegroundColor Red
+        Start-Sleep -Seconds 5
+        exit 1
+    }
     Write-Host "Download complete: $installerPath" -ForegroundColor Green
 
     Write-Host "Installing Twingate silently (network: inlumi.twingate.com)..." -ForegroundColor Yellow
@@ -202,7 +208,7 @@ if ($PostReboot) {
     Write-Host "Twingate installation verified." -ForegroundColor Green
 
     # Clean up installer
-    #Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
 
     # -- Step 6: Reboot ----------------------------------------------------
     Write-Step -Number 6 -Title "Reboot computer"

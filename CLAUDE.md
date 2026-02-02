@@ -22,6 +22,8 @@ $tokens = $null; $errors = $null
 $errors  # empty = valid
 ```
 
+Note: when running this from bash/git-bash on Windows, `$` signs are stripped. Write a temporary `.ps1` file and run it with `powershell -NoProfile -ExecutionPolicy Bypass -File validate.ps1` instead.
+
 ## Architecture
 
 ### fix_twingate.ps1 — Orchestrator (multi-reboot workflow)
@@ -31,7 +33,7 @@ The main script performs an 8-step repair that spans **three reboots**, using sc
 | Invocation | Execution path | Steps |
 |---|---|---|
 | No switches | FIRST RUN | 1-4: Kill Twingate, uninstall, cleanup, reboot |
-| `-PostReboot` | AFTER FIRST REBOOT | 5-6: Download & install Twingate, reboot |
+| `-PostReboot` | AFTER FIRST REBOOT | 5-6: Delete all Twingate profiles, download & install Twingate, reboot |
 | `-PostInstallReboot` | AFTER SECOND REBOOT | 7-8: Intune sync, cleanup, done |
 
 The reboot-resume mechanism works as follows:
@@ -43,17 +45,22 @@ The blocks are ordered chronologically in the file (Steps 1-4, then 5-6, then 7-
 
 ### Standalone cleanup scripts
 
-Three variants exist with overlapping functionality (ghost adapter removal + network profile cleanup):
+Two scripts exist with overlapping functionality (ghost adapter removal + network profile cleanup):
 
-- **Remove-Twingate-Cleanup.ps1** — Called by `fix_twingate.ps1` in steps 3 and 8. Does NOT self-elevate (expects caller to provide admin context).
-- **Remove-TwingateGhostAdapters.ps1** — Standalone version that self-elevates. Deletes ALL `Twingate*` profiles.
-- **Remove-TwingateGhosts.ps1** — Standalone version without self-elevation. Only deletes numbered stale profiles (`Twingate \d+`), preserves/renames the active one.
+- **Remove-Twingate-Cleanup.ps1** — Called by `fix_twingate.ps1` in steps 3 and 8. Does NOT self-elevate (expects caller to provide admin context). Inline profile cleanup logic (duplicated in two code paths: no-ghosts early exit and post-removal).
+- **Remove-TwingateGhosts.ps1** — Standalone version. Warns if not admin but does not self-elevate. Uses `Clean-TwingateProfiles` helper function to avoid duplication. Deletes stale `Twingate*` profiles, preserves/renames the active one.
+
+### Profile cleanup behavior differences
+
+- **fix_twingate.ps1 Step 5**: Deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
+- **Cleanup scripts**: Preserve the active Twingate profile (rename it to "Twingate" if needed), only delete stale ones (`Twingate*` where name != "Twingate").
 
 ## Key Implementation Details
 
 - Self-elevation pattern: checks `WindowsPrincipal.IsInRole(Administrator)`, re-launches with `-Verb RunAs` if not admin
 - Twingate installer is downloaded via `curl.exe` (Windows built-in) from `https://api.twingate.com/download/windows`
-- Install flags: `/qn network='inlumi.twingate.com' auto_update=true`
+- Install flags: `preq_share=true /qn network=inlumi.twingate.com auto_update=true`
 - Intune sync is triggered by restarting the `IntuneManagementExtension` service and running MDM `EnterpriseMgmt` scheduled tasks
 - Ghost adapters are detected via `Get-PnpDevice -Class Net` where Status != "OK", removed via `pnputil /remove-device`
 - Network profiles live in `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles`
+- Post-download validation checks both file existence and non-zero size before attempting install
