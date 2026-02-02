@@ -10,6 +10,18 @@ Ghost adapters and numbered network profiles (e.g. "Twingate 4") can accumulate 
 
 Performs a complete uninstall/reinstall cycle across three reboots, resuming automatically via scheduled tasks. Self-elevates to admin.
 
+| Step | Action |
+|------|--------|
+| 1 | Quit the Twingate client |
+| 2 | Uninstall Twingate |
+| 3 | Remove ghost adapters and stale network profiles |
+| 4 | Reboot (resumes automatically) |
+| 5 | Install .NET 8 Desktop Runtime (prerequisite for Twingate MSI) |
+| 6 | Download and install Twingate MSI (`inlumi.twingate.com`) |
+| 7 | Reboot (resumes automatically) |
+| 8 | Trigger Intune sync |
+| 9 | Final ghost adapter / profile cleanup |
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File fix_twingate.ps1
 ```
