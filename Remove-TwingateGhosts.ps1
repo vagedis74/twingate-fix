@@ -11,6 +11,8 @@ $ghostAdapters = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
 
 if (-not $ghostAdapters) {
     Write-Host "No ghost Twingate adapters found.`n" -ForegroundColor Green
+    Write-Host "Press space to exit..." -ForegroundColor DarkGray
+    while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
     exit 0
 }
 
@@ -41,6 +43,10 @@ foreach ($adapter in $ghostAdapters) {
 Write-Host ""
 if ($failed -gt 0) {
     Write-Host "$failed adapter(s) could not be removed. Run as administrator." -ForegroundColor Red
+    Write-Host "Press space to exit..." -ForegroundColor DarkGray
+    while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
     exit 1
 }
 Write-Host "All ghost Twingate adapters removed.`n" -ForegroundColor Green
+Write-Host "Press space to exit..." -ForegroundColor DarkGray
+while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
