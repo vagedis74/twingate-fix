@@ -57,8 +57,18 @@ if ($RemoveInstanceIds) {
     }
 
     Write-Host "`nCould not verify connection after 5 attempts." -ForegroundColor Red
-    Read-Host "`nPress Enter to close"
-    exit 1
+    Write-Host "A reboot may be required to fix the Twingate adapter.`n" -ForegroundColor Yellow
+    try {
+        Write-Host "Press Space to reboot now, or close this window to cancel..." -ForegroundColor DarkGray
+        do {
+            $key = [System.Console]::ReadKey($true)
+        } while ($key.Key -ne 'Spacebar')
+    } catch {
+        $response = Read-Host "Type 'reboot' to reboot now, or press Enter to cancel"
+        if ($response -ne 'reboot') { exit 1 }
+    }
+    Write-Host "`nRebooting..." -ForegroundColor Cyan
+    Restart-Computer -Force
 }
 
 # --- Main flow (no admin required for scanning) ---
@@ -178,7 +188,18 @@ if (-not $ghostAdapters -or $ghostAdapters.Count -eq 0) {
         }
 
         Write-Host "`nCould not verify connection after 5 attempts." -ForegroundColor Red
-        exit 1
+        Write-Host "A reboot may be required to fix the Twingate adapter.`n" -ForegroundColor Yellow
+        try {
+            Write-Host "Press Space to reboot now, or close this window to cancel..." -ForegroundColor DarkGray
+            do {
+                $key = [System.Console]::ReadKey($true)
+            } while ($key.Key -ne 'Spacebar')
+        } catch {
+            $response = Read-Host "Type 'reboot' to reboot now, or press Enter to cancel"
+            if ($response -ne 'reboot') { exit 1 }
+        }
+        Write-Host "`nRebooting..." -ForegroundColor Cyan
+        Restart-Computer -Force
     }
 
     # Ghost adapters found after stopping — continue to removal prompt
