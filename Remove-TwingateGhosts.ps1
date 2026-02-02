@@ -11,7 +11,40 @@ $ghostAdapters = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
 
 if (-not $ghostAdapters) {
     Write-Host "No ghost Twingate adapters found.`n" -ForegroundColor Green
-    Write-Host "Press space to exit..." -ForegroundColor DarkGray
+
+    # Clean up stale Twingate network profiles
+    Write-Host "Checking Twingate network profiles..." -ForegroundColor Cyan
+    $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
+    $activeProfile = Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+        Where-Object { $_.InterfaceAlias -like "*Twingate*" }
+
+    if ($activeProfile -and $activeProfile.Name -ne "Twingate") {
+        Get-ChildItem $profilesPath | ForEach-Object {
+            $props = Get-ItemProperty $_.PSPath
+            if ($props.ProfileName -eq $activeProfile.Name) {
+                Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate"
+                Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
+            }
+        }
+    }
+
+    $deleted = 0
+    Get-ChildItem $profilesPath | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath
+        if ($props.ProfileName -match '^Twingate \d+$') {
+            Remove-Item $_.PSPath -Recurse -Force
+            Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
+            $deleted++
+        }
+    }
+
+    if ($deleted -eq 0 -and (-not $activeProfile -or $activeProfile.Name -eq "Twingate")) {
+        Write-Host "  No stale profiles found." -ForegroundColor Green
+    } else {
+        Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
+    }
+
+    Write-Host "`nPress space to exit..." -ForegroundColor DarkGray
     while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
     exit 0
 }
@@ -48,5 +81,38 @@ if ($failed -gt 0) {
     exit 1
 }
 Write-Host "All ghost Twingate adapters removed.`n" -ForegroundColor Green
+
+# Clean up stale Twingate network profiles
+Write-Host "Cleaning up Twingate network profiles..." -ForegroundColor Cyan
+$profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
+$activeProfile = Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+    Where-Object { $_.InterfaceAlias -like "*Twingate*" }
+
+if ($activeProfile -and $activeProfile.Name -ne "Twingate") {
+    Get-ChildItem $profilesPath | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath
+        if ($props.ProfileName -eq $activeProfile.Name) {
+            Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate"
+            Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
+        }
+    }
+}
+
+$deleted = 0
+Get-ChildItem $profilesPath | ForEach-Object {
+    $props = Get-ItemProperty $_.PSPath
+    if ($props.ProfileName -match '^Twingate \d+$') {
+        Remove-Item $_.PSPath -Recurse -Force
+        Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
+        $deleted++
+    }
+}
+
+if ($deleted -eq 0 -and (-not $activeProfile -or $activeProfile.Name -eq "Twingate")) {
+    Write-Host "  No stale profiles found." -ForegroundColor Green
+} else {
+    Write-Host "  Profile cleanup complete.`n" -ForegroundColor Green
+}
+
 Write-Host "Press space to exit..." -ForegroundColor DarkGray
 while ($host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character -ne ' ') {}
