@@ -476,52 +476,7 @@ if ($PostInstallReboot) {
     }
 
     if ($adapterUp) {
-        Write-Host "Testing connectivity to 10.129.255.1..." -ForegroundColor Yellow
-        $pingResult = Test-Connection -ComputerName 10.129.255.1 -Count 3 -Quiet -ErrorAction SilentlyContinue
-        if ($pingResult) {
-            Write-Host "Twingate is connected and internal network is reachable." -ForegroundColor Green
-        } else {
-            Write-Host "Ping failed. Attempting to re-authenticate Twingate..." -ForegroundColor Yellow
-
-            # Stop and restart Twingate to force re-authentication
-            Get-Process -Name "Twingate*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 3
-            if ($twingateExePath) {
-                Start-Process -FilePath $twingateExePath -ErrorAction SilentlyContinue
-            }
-
-            Write-Host "Please sign in to Twingate again when the login window appears." -ForegroundColor Yellow
-            Write-Host "Waiting for Twingate adapter to come up (up to 90 seconds)..." -ForegroundColor Yellow
-
-            # Poll for adapter again after re-auth
-            $retryAdapterUp = $false
-            $retryElapsed = 0
-            while ($retryElapsed -lt $timeout) {
-                $retryAdapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Twingate*" -and $_.Status -eq "Up" }
-                if ($retryAdapter) {
-                    $retryAdapterUp = $true
-                    Write-Host "Twingate adapter is up: $($retryAdapter.Name)" -ForegroundColor Green
-                    break
-                }
-                Start-Sleep -Seconds 5
-                $retryElapsed += 5
-                Write-Host "  Waiting... ($retryElapsed/$timeout seconds)" -ForegroundColor DarkGray
-            }
-
-            if ($retryAdapterUp) {
-                Write-Host "Retrying ping to 10.129.255.1..." -ForegroundColor Yellow
-                $retryPing = Test-Connection -ComputerName 10.129.255.1 -Count 3 -Quiet -ErrorAction SilentlyContinue
-                if ($retryPing) {
-                    Write-Host "Twingate is connected and internal network is reachable." -ForegroundColor Green
-                } else {
-                    Write-Host "WARNING: Twingate adapter is up but could not reach 10.129.255.1." -ForegroundColor Red
-                    Write-Host "Check Twingate resources and network configuration." -ForegroundColor Yellow
-                }
-            } else {
-                Write-Host "WARNING: Twingate adapter did not come up after re-authentication." -ForegroundColor Red
-                Write-Host "Please verify Twingate connectivity manually." -ForegroundColor Yellow
-            }
-        }
+        Write-Host "Twingate adapter is up and running." -ForegroundColor Green
     } else {
         Write-Host "WARNING: Twingate adapter did not come up within $timeout seconds." -ForegroundColor Red
         Write-Host "Please verify Twingate connectivity manually." -ForegroundColor Yellow
