@@ -67,6 +67,14 @@ Write-Host "`n  Twingate Client Fix - Automated Script`n" -ForegroundColor Green
 # -- Step 1: Quit Twingate -----------------------------------------------------
 Write-Step -Number 1 -Title "Quit Twingate"
 
+# Stop the Twingate service first to prevent it from respawning processes
+$twingateSvc = Get-Service -Name "TwingateService" -ErrorAction SilentlyContinue
+if ($twingateSvc -and $twingateSvc.Status -eq "Running") {
+    Write-Host "Stopping Twingate service..." -ForegroundColor Yellow
+    Stop-Service -Name "TwingateService" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
 $twingateProcs = Get-Process -Name "Twingate*" -ErrorAction SilentlyContinue
 if ($twingateProcs) {
     foreach ($proc in $twingateProcs) {
