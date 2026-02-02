@@ -10,7 +10,8 @@
     Step 6: Download and install Twingate silently, configure to join inlumi.twingate.com
     Step 7: Reboot computer
     Step 8: Trigger Intune sync so the device becomes trusted
-    Step 9: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
+    Step 9: Verify Twingate connection
+    Step 10: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
 .NOTES
     Must be run as administrator. The script self-elevates if needed.
     After the reboot in step 4, a scheduled task re-launches this script to continue at step 5.
@@ -32,7 +33,13 @@ if (-not $isAdmin) {
     $argList = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
     if ($PostReboot) { $argList += "-PostReboot" }
     if ($PostInstallReboot) { $argList += "-PostInstallReboot" }
-    Start-Process powershell -Verb RunAs -ArgumentList $argList
+    try {
+        Start-Process powershell -Verb RunAs -ArgumentList $argList -ErrorAction Stop
+    } catch {
+        Write-Host "ERROR: Failed to obtain administrator privileges: $_" -ForegroundColor Red
+        Start-Sleep -Seconds 5
+        exit 1
+    }
     exit
 }
 
@@ -156,12 +163,12 @@ Write-Step -Number 4 -Title "Reboot computer"
 Write-Host "Registering a scheduled task to resume at Step 5 after reboot..." -ForegroundColor Yellow
 
 # Create a scheduled task that runs this script with -PostReboot at next logon
-$action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$PSCommandPath`" -PostReboot"
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive
-
 try {
+    $action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$PSCommandPath`" -PostReboot" -ErrorAction Stop
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME -ErrorAction Stop
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ErrorAction Stop
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive -ErrorAction Stop
+
     Register-ScheduledTask -TaskName "FixTwingateContinue" `
         -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
         -Description "Continues the Twingate fix script after reboot (auto-deletes)" `
@@ -324,12 +331,12 @@ if ($PostReboot) {
 
     Write-Host "Registering a scheduled task to resume at Step 8 after reboot..." -ForegroundColor Yellow
 
-    $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$PSCommandPath`" -PostInstallReboot"
-    $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive
-
     try {
+        $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$PSCommandPath`" -PostInstallReboot" -ErrorAction Stop
+        $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME -ErrorAction Stop
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ErrorAction Stop
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive -ErrorAction Stop
+
         Register-ScheduledTask -TaskName "FixTwingatePostInstall" `
             -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
             -Description "Triggers Intune sync after Twingate install reboot (auto-deletes)" `
@@ -358,7 +365,7 @@ if ($PostReboot) {
 }
 
 # ===============================================================================
-# AFTER SECOND REBOOT (Steps 8-9)
+# AFTER SECOND REBOOT (Steps 8-10)
 # ===============================================================================
 if ($PostInstallReboot) {
     Write-Host "`n  Resuming Twingate fix after install reboot...`n" -ForegroundColor Green
@@ -396,8 +403,117 @@ if ($PostInstallReboot) {
 
     Wait-Continue
 
-    # -- Step 9: Execute cleanup script ---------------------------------------
-    Write-Step -Number 9 -Title "Execute Remove-TwingateGhosts.ps1"
+    # -- Step 9: Verify Twingate connection ------------------------------------
+    Write-Step -Number 9 -Title "Verify Twingate connection"
+
+    # Find Twingate executable path from registry or known location
+    $twingateExePath = $null
+    $twingateReg = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like "*Twingate*" }
+    if ($twingateReg -and $twingateReg.InstallLocation) {
+        $candidate = Join-Path $twingateReg.InstallLocation "Twingate.exe"
+        if (Test-Path $candidate) { $twingateExePath = $candidate }
+    }
+    if (-not $twingateExePath) {
+        $candidate = "$env:ProgramFiles\Twingate\Twingate.exe"
+        if (Test-Path $candidate) { $twingateExePath = $candidate }
+    }
+
+    # Start Twingate if not running
+    $twingateRunning = Get-Process -Name "Twingate" -ErrorAction SilentlyContinue
+    if (-not $twingateRunning) {
+        if ($twingateExePath) {
+            Write-Host "Starting Twingate..." -ForegroundColor Yellow
+            Start-Process -FilePath $twingateExePath -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+            $twingateRunning = Get-Process -Name "Twingate" -ErrorAction SilentlyContinue
+            if ($twingateRunning) {
+                Write-Host "Twingate process started." -ForegroundColor Green
+            } else {
+                Write-Host "WARNING: Could not start Twingate. Please launch it manually." -ForegroundColor Red
+            }
+        } else {
+            Write-Host "WARNING: Could not find Twingate executable. Please launch it manually." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Twingate is already running." -ForegroundColor Green
+    }
+
+    Write-Host "`nPlease sign in to Twingate when the login window appears." -ForegroundColor Yellow
+    Write-Host "Waiting for Twingate adapter to come up (up to 90 seconds)..." -ForegroundColor Yellow
+
+    # Poll for Twingate adapter
+    $adapterUp = $false
+    $elapsed = 0
+    $timeout = 90
+    while ($elapsed -lt $timeout) {
+        $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Twingate*" -and $_.Status -eq "Up" }
+        if ($adapter) {
+            $adapterUp = $true
+            Write-Host "Twingate adapter is up: $($adapter.Name)" -ForegroundColor Green
+            break
+        }
+        Start-Sleep -Seconds 5
+        $elapsed += 5
+        Write-Host "  Waiting... ($elapsed/$timeout seconds)" -ForegroundColor DarkGray
+    }
+
+    if ($adapterUp) {
+        Write-Host "Testing connectivity to 10.129.255.1..." -ForegroundColor Yellow
+        $pingResult = Test-Connection -ComputerName 10.129.255.1 -Count 3 -Quiet -ErrorAction SilentlyContinue
+        if ($pingResult) {
+            Write-Host "Twingate is connected and internal network is reachable." -ForegroundColor Green
+        } else {
+            Write-Host "Ping failed. Attempting to re-authenticate Twingate..." -ForegroundColor Yellow
+
+            # Stop and restart Twingate to force re-authentication
+            Get-Process -Name "Twingate*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+            if ($twingateExePath) {
+                Start-Process -FilePath $twingateExePath -ErrorAction SilentlyContinue
+            }
+
+            Write-Host "Please sign in to Twingate again when the login window appears." -ForegroundColor Yellow
+            Write-Host "Waiting for Twingate adapter to come up (up to 90 seconds)..." -ForegroundColor Yellow
+
+            # Poll for adapter again after re-auth
+            $retryAdapterUp = $false
+            $retryElapsed = 0
+            while ($retryElapsed -lt $timeout) {
+                $retryAdapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Twingate*" -and $_.Status -eq "Up" }
+                if ($retryAdapter) {
+                    $retryAdapterUp = $true
+                    Write-Host "Twingate adapter is up: $($retryAdapter.Name)" -ForegroundColor Green
+                    break
+                }
+                Start-Sleep -Seconds 5
+                $retryElapsed += 5
+                Write-Host "  Waiting... ($retryElapsed/$timeout seconds)" -ForegroundColor DarkGray
+            }
+
+            if ($retryAdapterUp) {
+                Write-Host "Retrying ping to 10.129.255.1..." -ForegroundColor Yellow
+                $retryPing = Test-Connection -ComputerName 10.129.255.1 -Count 3 -Quiet -ErrorAction SilentlyContinue
+                if ($retryPing) {
+                    Write-Host "Twingate is connected and internal network is reachable." -ForegroundColor Green
+                } else {
+                    Write-Host "WARNING: Twingate adapter is up but could not reach 10.129.255.1." -ForegroundColor Red
+                    Write-Host "Check Twingate resources and network configuration." -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "WARNING: Twingate adapter did not come up after re-authentication." -ForegroundColor Red
+                Write-Host "Please verify Twingate connectivity manually." -ForegroundColor Yellow
+            }
+        }
+    } else {
+        Write-Host "WARNING: Twingate adapter did not come up within $timeout seconds." -ForegroundColor Red
+        Write-Host "Please verify Twingate connectivity manually." -ForegroundColor Yellow
+    }
+
+    Wait-Continue
+
+    # -- Step 10: Execute cleanup script ---------------------------------------
+    Write-Step -Number 10 -Title "Execute Remove-TwingateGhosts.ps1"
 
     $cleanupScript = Join-Path $PSScriptRoot "Remove-TwingateGhosts.ps1"
 

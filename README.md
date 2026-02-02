@@ -20,7 +20,8 @@ Performs a complete uninstall/reinstall cycle across three reboots, resuming aut
 | 6 | Download and install Twingate MSI (`inlumi.twingate.com`) |
 | 7 | Reboot (resumes automatically) |
 | 8 | Trigger Intune sync |
-| 9 | Final ghost adapter / profile cleanup |
+| 9 | Verify Twingate connection |
+| 10 | Final ghost adapter / profile cleanup |
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File fix_twingate.ps1
