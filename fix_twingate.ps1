@@ -6,14 +6,15 @@
     Step 2: Uninstall Twingate
     Step 3: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
     Step 4: Reboot (script resumes automatically after logon)
-    Step 5: Download and install Twingate silently, configure to join inlumi.twingate.com
-    Step 6: Reboot computer
-    Step 7: Trigger Intune sync so the device becomes trusted
-    Step 8: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
+    Step 5: Install .NET 8 Desktop Runtime (prerequisite for Twingate MSI)
+    Step 6: Download and install Twingate silently, configure to join inlumi.twingate.com
+    Step 7: Reboot computer
+    Step 8: Trigger Intune sync so the device becomes trusted
+    Step 9: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
 .NOTES
     Must be run as administrator. The script self-elevates if needed.
     After the reboot in step 4, a scheduled task re-launches this script to continue at step 5.
-    After the reboot in step 6, a scheduled task re-launches this script to continue at step 7.
+    After the reboot in step 7, a scheduled task re-launches this script to continue at step 8.
 #>
 
 param(
@@ -183,7 +184,7 @@ try {
 }
 
 # ===============================================================================
-# AFTER FIRST REBOOT (Steps 5-6)
+# AFTER FIRST REBOOT (Steps 5-7)
 # ===============================================================================
 if ($PostReboot) {
     Write-Host "`n  Resuming Twingate fix after reboot...`n" -ForegroundColor Green
@@ -191,8 +192,62 @@ if ($PostReboot) {
     # Clean up the scheduled task
     Unregister-ScheduledTask -TaskName "FixTwingateContinue" -Confirm:$false -ErrorAction SilentlyContinue
 
-    # -- Step 5: Download, install and configure Twingate ------------------
-    Write-Step -Number 5 -Title "Download and install Twingate silently"
+    # -- Step 5: Install .NET 8 Desktop Runtime ----------------------------
+    Write-Step -Number 5 -Title "Install .NET 8 Desktop Runtime"
+
+    # Check if .NET 8 Desktop Runtime is already installed
+    $dotnet8Installed = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like "*Windows Desktop Runtime*8.0*" }
+
+    if ($dotnet8Installed) {
+        Write-Host ".NET 8 Desktop Runtime is already installed — skipping." -ForegroundColor Green
+    } else {
+        $dotnetUrl  = "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/8.0.23/windowsdesktop-runtime-8.0.23-win-x64.exe"
+        $dotnetPath = "$env:USERPROFILE\Downloads\windowsdesktop-runtime-8.0.23-win-x64.exe"
+
+        Write-Host "Downloading .NET 8 Desktop Runtime..." -ForegroundColor Yellow
+        & curl.exe -L -o $dotnetPath $dotnetUrl
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Download failed (exit code $LASTEXITCODE)." -ForegroundColor Red
+            Write-Host "Please download manually from: $dotnetUrl" -ForegroundColor Yellow
+            Start-Sleep -Seconds 5
+            exit 1
+        }
+        if (-not (Test-Path $dotnetPath) -or (Get-Item $dotnetPath).Length -eq 0) {
+            Write-Host "Downloaded file is missing or empty." -ForegroundColor Red
+            Start-Sleep -Seconds 5
+            exit 1
+        }
+        Write-Host "Download complete: $dotnetPath" -ForegroundColor Green
+
+        Write-Host "Installing .NET 8 Desktop Runtime silently..." -ForegroundColor Yellow
+        $dotnetProc = Start-Process -FilePath $dotnetPath -ArgumentList "/install /quiet /norestart" -Wait -PassThru
+        # Exit code 3010 means success but reboot required — we reboot in Step 7
+        if ($dotnetProc.ExitCode -ne 0 -and $dotnetProc.ExitCode -ne 3010) {
+            Write-Host "Installation failed (exit code $($dotnetProc.ExitCode))." -ForegroundColor Red
+            Remove-Item $dotnetPath -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 10
+            exit 1
+        }
+
+        # Clean up installer
+        Remove-Item $dotnetPath -Force -ErrorAction SilentlyContinue
+
+        # Verify .NET 8 Desktop Runtime is actually installed
+        $dotnet8Verify = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "*Windows Desktop Runtime*8.0*" }
+        if (-not $dotnet8Verify) {
+            Write-Host "Installation reported success but .NET 8 Desktop Runtime was not found. Install may have failed." -ForegroundColor Red
+            Start-Sleep -Seconds 10
+            exit 1
+        }
+        Write-Host ".NET 8 Desktop Runtime installed successfully." -ForegroundColor Green
+    }
+
+    Wait-Continue
+
+    # -- Step 6: Download, install and configure Twingate ------------------
+    Write-Step -Number 6 -Title "Download and install Twingate silently"
 
     # Delete all remaining Twingate network profiles before fresh install
     Write-Host "Removing all Twingate network profiles..." -ForegroundColor Yellow
@@ -216,8 +271,8 @@ if ($PostReboot) {
         Write-Host "  Deleted $deleted Twingate profile(s)." -ForegroundColor Green
     }
 
-    $installerUrl  = "https://api.twingate.com/download/windows"
-    $installerPath = "$env:USERPROFILE\Downloads\TwingateWindowsInstaller.exe"
+    $installerUrl  = "https://api.twingate.com/download/windows?installer=msi"
+    $installerPath = "$env:USERPROFILE\Downloads\TwingateWindowsInstaller.msi"
 
     Write-Host "Downloading Twingate installer..." -ForegroundColor Yellow
     & curl.exe -L -o $installerPath $installerUrl
@@ -235,7 +290,7 @@ if ($PostReboot) {
     Write-Host "Download complete: $installerPath" -ForegroundColor Green
 
     Write-Host "Installing Twingate silently (network: inlumi.twingate.com)..." -ForegroundColor Yellow
-    $installProc = Start-Process -FilePath $installerPath -ArgumentList "preq_share=true /qn network=inlumi.twingate.com auto_update=true" -Wait -PassThru
+    $installProc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /qn network=inlumi.twingate.com auto_update=true no_optional_updates=true" -Wait -PassThru
     if ($installProc.ExitCode -ne 0) {
         Write-Host "Installation failed (exit code $($installProc.ExitCode))." -ForegroundColor Red
         Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
@@ -256,10 +311,10 @@ if ($PostReboot) {
     # Clean up installer
     Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
 
-    # -- Step 6: Reboot ----------------------------------------------------
-    Write-Step -Number 6 -Title "Reboot computer"
+    # -- Step 7: Reboot ----------------------------------------------------
+    Write-Step -Number 7 -Title "Reboot computer"
 
-    Write-Host "Registering a scheduled task to resume at Step 7 after reboot..." -ForegroundColor Yellow
+    Write-Host "Registering a scheduled task to resume at Step 8 after reboot..." -ForegroundColor Yellow
 
     $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$PSCommandPath`" -PostInstallReboot"
     $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
@@ -280,7 +335,7 @@ if ($PostReboot) {
 
     Write-Host "Scheduled task registered." -ForegroundColor Green
     Write-Host "`nRebooting to complete the installation..." -ForegroundColor Yellow
-    Write-Host "After you log back in, the script will trigger an Intune sync (Step 7).`n" -ForegroundColor Yellow
+    Write-Host "After you log back in, the script will trigger an Intune sync (Step 8).`n" -ForegroundColor Yellow
 
     Start-Sleep -Seconds 15
 
@@ -288,14 +343,14 @@ if ($PostReboot) {
         Restart-Computer -Force -ErrorAction Stop
     } catch {
         Write-Host "ERROR: Failed to reboot: $_" -ForegroundColor Red
-        Write-Host "Please reboot manually. The scheduled task will resume the script at Step 7." -ForegroundColor Yellow
+        Write-Host "Please reboot manually. The scheduled task will resume the script at Step 8." -ForegroundColor Yellow
         Start-Sleep -Seconds 10
         exit 1
     }
 }
 
 # ===============================================================================
-# AFTER SECOND REBOOT (Steps 7-8)
+# AFTER SECOND REBOOT (Steps 8-9)
 # ===============================================================================
 if ($PostInstallReboot) {
     Write-Host "`n  Resuming Twingate fix after install reboot...`n" -ForegroundColor Green
@@ -303,8 +358,8 @@ if ($PostInstallReboot) {
     # Clean up the scheduled task
     Unregister-ScheduledTask -TaskName "FixTwingatePostInstall" -Confirm:$false -ErrorAction SilentlyContinue
 
-    # -- Step 7: Trigger Intune sync ----------------------------------------
-    Write-Step -Number 7 -Title "Trigger Intune sync"
+    # -- Step 8: Trigger Intune sync ----------------------------------------
+    Write-Step -Number 8 -Title "Trigger Intune sync"
 
     Write-Host "Triggering Intune device sync to establish device trust..." -ForegroundColor Yellow
 
@@ -333,8 +388,8 @@ if ($PostInstallReboot) {
 
     Wait-Continue
 
-    # -- Step 8: Execute cleanup script ---------------------------------------
-    Write-Step -Number 8 -Title "Execute Remove-TwingateGhosts.ps1"
+    # -- Step 9: Execute cleanup script ---------------------------------------
+    Write-Step -Number 9 -Title "Execute Remove-TwingateGhosts.ps1"
 
     $cleanupScript = Join-Path $PSScriptRoot "Remove-TwingateGhosts.ps1"
 
