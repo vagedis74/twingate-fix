@@ -117,7 +117,7 @@ if ($PostReboot) {
     Write-Host "Download complete: $installerPath" -ForegroundColor Green
 
     Write-Host "Installing Twingate silently (network: inlumi.twingate.com)..." -ForegroundColor Yellow
-    Start-Process -FilePath $installerPath -ArgumentList "/qn network=inlumi.twingate.com auto_update=true" -Wait
+    Start-Process -FilePath $installerPath -ArgumentList "/qn network=inlumi.twingate.com no_optional_updates=true auto_update=true" -Wait
     Write-Host "Twingate installation complete." -ForegroundColor Green
 
     # Clean up installer
