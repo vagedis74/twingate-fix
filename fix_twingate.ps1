@@ -66,6 +66,18 @@ if ($twingateProcs) {
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
     }
     Start-Sleep -Seconds 2
+
+    # Verify all Twingate processes actually stopped
+    $remaining = Get-Process -Name "Twingate*" -ErrorAction SilentlyContinue
+    if ($remaining) {
+        Write-Host "ERROR: The following Twingate processes are still running:" -ForegroundColor Red
+        foreach ($p in $remaining) {
+            Write-Host "  $($p.Name) (PID $($p.Id))" -ForegroundColor Red
+        }
+        Write-Host "Cannot proceed while Twingate is running. Please close it manually." -ForegroundColor Red
+        Start-Sleep -Seconds 10
+        exit 1
+    }
     Write-Host "Twingate processes stopped." -ForegroundColor Green
 } else {
     Write-Host "Twingate is not running." -ForegroundColor Green
@@ -83,11 +95,21 @@ if ($twingateApp) {
     Write-Host "Found: $($twingateApp.DisplayName) ($($twingateApp.DisplayVersion))" -ForegroundColor Yellow
     Write-Host "Uninstalling Twingate silently..." -ForegroundColor Yellow
     $uninstallProc = Start-Process msiexec -ArgumentList "/x $($twingateApp.PSChildName) /qn" -Wait -PassThru
-    if ($uninstallProc.ExitCode -eq 0) {
-        Write-Host "Twingate uninstall complete." -ForegroundColor Green
-    } else {
-        Write-Host "Uninstall returned code $($uninstallProc.ExitCode)." -ForegroundColor Red
+    if ($uninstallProc.ExitCode -ne 0) {
+        Write-Host "Uninstall failed (exit code $($uninstallProc.ExitCode))." -ForegroundColor Red
+        Start-Sleep -Seconds 10
+        exit 1
     }
+
+    # Verify Twingate is actually gone from the registry
+    $stillInstalled = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like "*Twingate*" }
+    if ($stillInstalled) {
+        Write-Host "Uninstall reported success but Twingate is still present in the registry." -ForegroundColor Red
+        Start-Sleep -Seconds 10
+        exit 1
+    }
+    Write-Host "Twingate uninstall complete and verified." -ForegroundColor Green
 } else {
     Write-Host "Twingate is not installed (or already uninstalled)." -ForegroundColor Green
 }
@@ -130,10 +152,17 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive
 
-Register-ScheduledTask -TaskName "FixTwingateContinue" `
-    -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-    -Description "Continues the Twingate fix script after reboot (auto-deletes)" `
-    -Force | Out-Null
+try {
+    Register-ScheduledTask -TaskName "FixTwingateContinue" `
+        -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
+        -Description "Continues the Twingate fix script after reboot (auto-deletes)" `
+        -Force -ErrorAction Stop | Out-Null
+} catch {
+    Write-Host "ERROR: Failed to register scheduled task: $_" -ForegroundColor Red
+    Write-Host "Cannot safely reboot without a resume task. Aborting." -ForegroundColor Red
+    Start-Sleep -Seconds 10
+    exit 1
+}
 
 Write-Host "Scheduled task registered." -ForegroundColor Green
 Write-Host "`nThe computer will reboot now. After you log back in," -ForegroundColor Yellow
@@ -142,7 +171,14 @@ Write-Host "the script will automatically continue with Step 5.`n" -ForegroundCo
 Write-Host "Rebooting in 5 seconds..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 5
 
-Restart-Computer -Force
+try {
+    Restart-Computer -Force -ErrorAction Stop
+} catch {
+    Write-Host "ERROR: Failed to reboot: $_" -ForegroundColor Red
+    Write-Host "Please reboot manually. The scheduled task will resume the script at Step 5." -ForegroundColor Yellow
+    Start-Sleep -Seconds 10
+    exit 1
+}
 
 }
 
@@ -202,6 +238,7 @@ if ($PostReboot) {
     $installProc = Start-Process -FilePath $installerPath -ArgumentList "preq_share=true /qn network=inlumi.twingate.com auto_update=true" -Wait -PassThru
     if ($installProc.ExitCode -ne 0) {
         Write-Host "Installation failed (exit code $($installProc.ExitCode))." -ForegroundColor Red
+        Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 10
         exit 1
     }
@@ -229,17 +266,32 @@ if ($PostReboot) {
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest -LogonType Interactive
 
-    Register-ScheduledTask -TaskName "FixTwingatePostInstall" `
-        -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-        -Description "Triggers Intune sync after Twingate install reboot (auto-deletes)" `
-        -Force | Out-Null
+    try {
+        Register-ScheduledTask -TaskName "FixTwingatePostInstall" `
+            -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
+            -Description "Triggers Intune sync after Twingate install reboot (auto-deletes)" `
+            -Force -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Host "ERROR: Failed to register scheduled task: $_" -ForegroundColor Red
+        Write-Host "Cannot safely reboot without a resume task. Aborting." -ForegroundColor Red
+        Start-Sleep -Seconds 10
+        exit 1
+    }
 
     Write-Host "Scheduled task registered." -ForegroundColor Green
     Write-Host "`nRebooting to complete the installation..." -ForegroundColor Yellow
     Write-Host "After you log back in, the script will trigger an Intune sync (Step 7).`n" -ForegroundColor Yellow
 
     Start-Sleep -Seconds 15
-    Restart-Computer -Force
+
+    try {
+        Restart-Computer -Force -ErrorAction Stop
+    } catch {
+        Write-Host "ERROR: Failed to reboot: $_" -ForegroundColor Red
+        Write-Host "Please reboot manually. The scheduled task will resume the script at Step 7." -ForegroundColor Yellow
+        Start-Sleep -Seconds 10
+        exit 1
+    }
 }
 
 # ===============================================================================
@@ -266,7 +318,7 @@ if ($PostInstallReboot) {
     }
 
     # Trigger all MDM EnterpriseMgmt scheduled tasks (policy sync)
-    $mdmTasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" -ErrorAction SilentlyContinue
+    $mdmTasks = @(Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" -ErrorAction SilentlyContinue)
     if ($mdmTasks) {
         foreach ($task in $mdmTasks) {
             Start-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue

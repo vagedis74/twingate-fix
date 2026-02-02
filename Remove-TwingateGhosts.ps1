@@ -26,8 +26,12 @@ function Clean-TwingateProfiles {
         Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
             $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
             if ($props.ProfileName -eq $activeProfile.Name) {
-                Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate"
-                Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
+                try {
+                    Set-ItemProperty $_.PSPath -Name "ProfileName" -Value "Twingate" -ErrorAction Stop
+                    Write-Host "  Renamed '$($activeProfile.Name)' -> 'Twingate'" -ForegroundColor Green
+                } catch {
+                    Write-Host "  Failed to rename profile '$($activeProfile.Name)': $_" -ForegroundColor Red
+                }
             }
         }
     }
@@ -36,9 +40,13 @@ function Clean-TwingateProfiles {
     Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
         $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
         if ($props.ProfileName -like "Twingate*" -and $props.ProfileName -ne "Twingate") {
-            Remove-Item $_.PSPath -Recurse -Force
-            Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
-            $deleted++
+            try {
+                Remove-Item $_.PSPath -Recurse -Force -ErrorAction Stop
+                Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
+                $deleted++
+            } catch {
+                Write-Host "  Failed to delete profile '$($props.ProfileName)': $_" -ForegroundColor Red
+            }
         }
     }
 
