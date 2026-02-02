@@ -1,24 +1,33 @@
-# Twingate Ghost Adapter Fix
+# Twingate Client Repair Toolkit
 
-PowerShell script that removes ghost (phantom) Twingate network adapters and deletes all Twingate network profiles on Windows.
+PowerShell scripts for automated Twingate VPN client repair on Windows. Handles ghost adapter removal, stale network profile cleanup, and full uninstall/reinstall with Intune sync.
 
 Ghost adapters and numbered network profiles (e.g. "Twingate 4") can accumulate after Twingate client updates or reinstalls and may cause network connectivity issues.
 
-## Usage
+## Scripts
+
+### fix_twingate.ps1 — Full automated repair
+
+Performs a complete uninstall/reinstall cycle across three reboots, resuming automatically via scheduled tasks. Self-elevates to admin.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Remove-TwingateGhostAdapters.ps1
+powershell -ExecutionPolicy Bypass -File fix_twingate.ps1
 ```
 
-Or right-click the script and select **Run with PowerShell**.
+### Remove-TwingateGhosts.ps1 — Standalone cleanup
 
-## How it works
+Removes ghost adapters and stale network profiles without reinstalling. Requires admin (warns if not elevated).
 
-1. Auto-elevates to admin via UAC (required for device removal and registry access)
-2. Scans for ghost Twingate network adapters (status not OK) and removes them via `pnputil`
-3. Deletes all Twingate network profiles from the registry (`HKLM:\...\NetworkList\Profiles`)
+```powershell
+powershell -ExecutionPolicy Bypass -File Remove-TwingateGhosts.ps1
+```
+
+### Remove-Twingate-Cleanup.ps1
+
+Same as above, but intended to be called by `fix_twingate.ps1` rather than run directly.
 
 ## Requirements
 
 - Windows 10 / Windows 11 / Windows Server 2016+
 - PowerShell 5.1 or later
+- Administrator privileges
