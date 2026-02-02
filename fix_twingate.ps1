@@ -112,12 +112,20 @@ if ($twingateApp) {
     if ($twingateApp -is [array]) { $twingateApp = $twingateApp[0] }
     Write-Host "Found: $($twingateApp.DisplayName) ($($twingateApp.DisplayVersion))" -ForegroundColor Yellow
     Write-Host "Uninstalling Twingate silently..." -ForegroundColor Yellow
-    $uninstallProc = Start-Process msiexec -ArgumentList "/x $($twingateApp.PSChildName) /qn" -Wait -PassThru
-    if ($uninstallProc.ExitCode -ne 0) {
-        $ec = $uninstallProc.ExitCode
-        Write-Host "Uninstall failed with exit code $ec." -ForegroundColor Red
-        Start-Sleep -Seconds 10
-        exit 1
+    $maxRetries = 3
+    $retryDelay = 15
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        $uninstallProc = Start-Process msiexec -ArgumentList "/x $($twingateApp.PSChildName) /qn" -Wait -PassThru
+        if ($uninstallProc.ExitCode -eq 0) { break }
+        if ($uninstallProc.ExitCode -eq 1618 -and $attempt -lt $maxRetries) {
+            Write-Host "Another MSI operation is in progress. Waiting $retryDelay seconds before retry ($attempt/$maxRetries)..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $retryDelay
+        } else {
+            $ec = $uninstallProc.ExitCode
+            Write-Host "Uninstall failed with exit code $ec." -ForegroundColor Red
+            Start-Sleep -Seconds 10
+            exit 1
+        }
     }
 
     # Verify Twingate is actually gone from the registry
