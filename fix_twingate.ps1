@@ -219,7 +219,7 @@ if ($PostReboot) {
         Where-Object { $_.DisplayName -like "*Windows Desktop Runtime*8.0*" }
 
     if ($dotnet8Installed) {
-        Write-Host ".NET 8 Desktop Runtime is already installed — skipping." -ForegroundColor Green
+        Write-Host ".NET 8 Desktop Runtime is already installed - skipping." -ForegroundColor Green
     } else {
         $dotnetUrl  = "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/8.0.23/windowsdesktop-runtime-8.0.23-win-x64.exe"
         $dotnetPath = "$env:USERPROFILE\Downloads\windowsdesktop-runtime-8.0.23-win-x64.exe"
@@ -242,7 +242,7 @@ if ($PostReboot) {
 
         Write-Host "Installing .NET 8 Desktop Runtime silently..." -ForegroundColor Yellow
         $dotnetProc = Start-Process -FilePath $dotnetPath -ArgumentList "/install /quiet /norestart" -Wait -PassThru
-        # Exit code 3010 means success but reboot required — we reboot in Step 7
+        # Exit code 3010 means success but reboot required - we reboot in Step 7
         if ($dotnetProc.ExitCode -ne 0 -and $dotnetProc.ExitCode -ne 3010) {
             $ec = $dotnetProc.ExitCode
             Write-Host "Installation failed with exit code $ec." -ForegroundColor Red
@@ -417,8 +417,9 @@ if ($PostInstallReboot) {
     # Find Twingate executable path from registry or known location
     $twingateExePath = $null
     $twingateReg = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -like "*Twingate*" }
-    if ($twingateReg -and $twingateReg.InstallLocation) {
+        Where-Object { $_.DisplayName -like "*Twingate*" -and $_.InstallLocation } |
+        Select-Object -First 1
+    if ($twingateReg) {
         $candidate = Join-Path $twingateReg.InstallLocation "Twingate.exe"
         if (Test-Path $candidate) { $twingateExePath = $candidate }
     }
