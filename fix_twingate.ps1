@@ -68,10 +68,10 @@ Write-Host "`n  Twingate Client Fix - Automated Script`n" -ForegroundColor Green
 Write-Step -Number 1 -Title "Quit Twingate"
 
 # Stop the Twingate service first to prevent it from respawning processes
-$twingateSvc = Get-Service -Name "TwingateService" -ErrorAction SilentlyContinue
+$twingateSvc = Get-Service -Name "Twingate.Service" -ErrorAction SilentlyContinue
 if ($twingateSvc -and $twingateSvc.Status -eq "Running") {
     Write-Host "Stopping Twingate service..." -ForegroundColor Yellow
-    Stop-Service -Name "TwingateService" -Force -ErrorAction SilentlyContinue
+    Stop-Service -Name "Twingate.Service" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 }
 
@@ -105,9 +105,11 @@ Wait-Continue
 Write-Step -Number 2 -Title "Uninstall Twingate"
 
 $twingateApp = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-    Where-Object { $_.DisplayName -like "*Twingate*" }
+    Where-Object { $_.DisplayName -like "Twingate *" -and $_.PSChildName -match '^\{' }
 
 if ($twingateApp) {
+    # Handle multiple matches by taking the first MSI entry
+    if ($twingateApp -is [array]) { $twingateApp = $twingateApp[0] }
     Write-Host "Found: $($twingateApp.DisplayName) ($($twingateApp.DisplayVersion))" -ForegroundColor Yellow
     Write-Host "Uninstalling Twingate silently..." -ForegroundColor Yellow
     $uninstallProc = Start-Process msiexec -ArgumentList "/x $($twingateApp.PSChildName) /qn" -Wait -PassThru
@@ -223,7 +225,7 @@ if ($PostReboot) {
         Write-Host "Downloading .NET 8 Desktop Runtime..." -ForegroundColor Yellow
         & curl.exe -L -o $dotnetPath $dotnetUrl
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "Download failed (exit code $LASTEXITCODE)." -ForegroundColor Red
+            Write-Host "Download failed (exit code $($LASTEXITCODE))." -ForegroundColor Red
             Write-Host "Please download manually from: $dotnetUrl" -ForegroundColor Yellow
             Start-Sleep -Seconds 5
             exit 1
@@ -292,7 +294,7 @@ if ($PostReboot) {
     Write-Host "Downloading Twingate installer..." -ForegroundColor Yellow
     & curl.exe -L -o $installerPath $installerUrl
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Download failed (exit code $LASTEXITCODE)." -ForegroundColor Red
+        Write-Host "Download failed (exit code $($LASTEXITCODE))." -ForegroundColor Red
         Write-Host "Please download manually from: $installerUrl" -ForegroundColor Yellow
         Start-Sleep -Seconds 5
         exit 1
