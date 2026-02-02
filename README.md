@@ -26,12 +26,41 @@ Performs a complete uninstall/reinstall cycle across two reboots, resuming autom
 powershell -ExecutionPolicy Bypass -File fix_twingate.ps1
 ```
 
+### Reinstall-Twingate.ps1 — Quick reinstall
+
+Single-run reinstall using a local `TwingateWindowsInstaller.exe` bundled in the repo. Self-elevates to admin.
+
+| Step | Action |
+|------|--------|
+| 1 | Stop Twingate service and processes |
+| 2 | Uninstall Twingate (`REMOVE=ALL`) |
+| 3 | Remove ghost network adapters |
+| 4 | Delete all Twingate network profiles |
+| 5 | Install Twingate from local installer (`inlumi.twingate.com`) |
+| 6 | Reboot |
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Reinstall-Twingate.ps1
+```
+
 ### Remove-TwingateGhosts.ps1 — Standalone cleanup
 
 Removes ghost adapters and stale network profiles without reinstalling. Requires admin (warns if not elevated).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File Remove-TwingateGhosts.ps1
+```
+
+### New-TwingateGhostAdapter.ps1 — Test utility
+
+Creates simulated ghost Twingate network adapters for testing the removal scripts. Uses the Windows SetupDi API to register a fake adapter that appears with `Status=Error` in Device Manager.
+
+```powershell
+# Create one ghost adapter
+powershell -ExecutionPolicy Bypass -File New-TwingateGhostAdapter.ps1
+
+# Create multiple ghost adapters
+powershell -ExecutionPolicy Bypass -File New-TwingateGhostAdapter.ps1 -Count 3
 ```
 
 ## Requirements

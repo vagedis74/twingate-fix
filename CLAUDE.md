@@ -47,9 +47,27 @@ The blocks are ordered chronologically in the file (Steps 1-4, then 5-7, then 8-
 
 Called by `fix_twingate.ps1` in step 3, and can also be run standalone. Warns if not admin but does not self-elevate. Uses `Clean-TwingateProfiles` helper function. Exports Twingate profiles to `TwingateProfile.reg` before deletion, then deletes stale `Twingate*` profiles while preserving/renaming the active one.
 
+### Reinstall-Twingate.ps1 — Single-run reinstall
+
+A simpler alternative to `fix_twingate.ps1` that completes in a single run with one reboot. Uses a local `TwingateWindowsInstaller.exe` bundled in the repo instead of downloading the MSI. Self-elevates if not admin.
+
+| Step | Action |
+|------|--------|
+| 1 | Stop Twingate service and processes |
+| 2 | Uninstall Twingate via `Get-Package`/`Uninstall-Package` with `REMOVE=ALL` |
+| 3 | Remove ghost Twingate network adapters via `pnputil /remove-device` |
+| 4 | Delete ALL `Twingate*` network profiles from registry |
+| 5 | Install Twingate from local `TwingateWindowsInstaller.exe` (silent, `NETWORK=inlumi.twingate.com`) |
+| 6 | Reboot the computer |
+
+### New-TwingateGhostAdapter.ps1 — Test utility
+
+Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGhosts.ps1`. Uses the Windows SetupDi API (P/Invoke) to register a root-enumerated device in the Net class named "Twingate Virtual Adapter", then disables it via `pnputil /disable-device` so it appears with `Status=Error`. Accepts a `-Count` parameter to create multiple ghosts. Does not self-elevate.
+
 ### Profile cleanup behavior differences
 
 - **fix_twingate.ps1 Step 6**: Exports the active "Twingate" profile to `.reg`, then deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
+- **Reinstall-Twingate.ps1 Step 4**: Deletes ALL `Twingate*` profiles (no export) before fresh install.
 - **Remove-TwingateGhosts.ps1**: Exports profiles to `.reg`, preserves the active Twingate profile (renames it to "Twingate" if needed), only deletes stale ones (`Twingate*` where name != "Twingate").
 
 ## Error Handling Patterns

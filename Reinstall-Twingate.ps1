@@ -7,6 +7,7 @@
     Step 3: Remove ghost Twingate network adapters
     Step 4: Delete all Twingate network profiles from registry
     Step 5: Install Twingate from TwingateWindowsInstaller.exe in the script directory
+    Step 6: Reboot the computer
 .NOTES
     Must be run as administrator. The script self-elevates if needed.
     The installer TwingateWindowsInstaller.exe must be in the same folder as this script.
@@ -201,6 +202,18 @@ if ($installProc.ExitCode -ne 0) {
 
 Write-Host "Twingate installed successfully." -ForegroundColor Green
 
-Write-Host "`nDone. Please reboot and sign in to Twingate." -ForegroundColor Green
-Start-Sleep -Seconds 5
-exit 0
+# ==============================================================================
+# Step 6: Reboot computer
+# ==============================================================================
+Write-Host "`nStep 6 - Rebooting computer..." -ForegroundColor Cyan
+Write-Host "Rebooting in 10 seconds..." -ForegroundColor Yellow
+Start-Sleep -Seconds 10
+
+try {
+    Restart-Computer -Force -ErrorAction Stop
+} catch {
+    Write-Host "ERROR: Failed to reboot: $_" -ForegroundColor Red
+    Write-Host "Please reboot manually." -ForegroundColor Yellow
+    Start-Sleep -Seconds 5
+    exit 1
+}
