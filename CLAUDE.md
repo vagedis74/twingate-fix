@@ -52,6 +52,15 @@ Called by `fix_twingate.ps1` in steps 3 and 8, and can also be run standalone. W
 - **fix_twingate.ps1 Step 5**: Deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
 - **Cleanup scripts**: Preserve the active Twingate profile (rename it to "Twingate" if needed), only delete stale ones (`Twingate*` where name != "Twingate").
 
+## Error Handling Patterns
+
+Every step that can fail uses one of two patterns:
+
+- **External process**: check exit code, print error, `exit 1`. E.g. `msiexec`, `curl.exe`, `pnputil`, installer.
+- **PowerShell cmdlet**: `try { ... -ErrorAction Stop } catch { Write-Host error; exit 1 }`. E.g. `Register-ScheduledTask`, `Restart-Computer`, `Remove-Item`, `Set-ItemProperty`.
+
+Steps that are best-effort by design (Intune sync in Step 7, final cleanup in Step 8) intentionally use `-ErrorAction SilentlyContinue` and do not exit on failure.
+
 ## Key Implementation Details
 
 - Self-elevation pattern: checks `WindowsPrincipal.IsInRole(Administrator)`, re-launches with `-Verb RunAs` if not admin
