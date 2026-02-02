@@ -1,6 +1,6 @@
 # Twingate Ghost Adapter Fix
 
-PowerShell script that detects and removes ghost (phantom) Twingate network adapters and cleans up stale network profiles on Windows.
+PowerShell script that removes ghost (phantom) Twingate network adapters and deletes all Twingate network profiles on Windows.
 
 Ghost adapters and numbered network profiles (e.g. "Twingate 4") can accumulate after Twingate client updates or reinstalls and may cause network connectivity issues.
 
@@ -14,13 +14,9 @@ Or right-click the script and select **Run with PowerShell**.
 
 ## How it works
 
-1. Checks if the Twingate client is installed and shows the version
-2. Scans for all Twingate network adapters (no admin required)
-3. Shows active adapters and identifies any ghost devices (status not OK)
-4. If ghost adapters are found, press Space to remove them (auto-elevates to admin via UAC)
-5. If no ghost adapters are found, stops the Twingate client and re-scans to catch adapters that only appear as ghost devices after the client exits
-6. Cleans up stale Twingate network profiles — renames the active profile back to "Twingate" and deletes orphaned "Twingate 2", "Twingate 3", etc. from the registry
-7. After a clean re-scan, restarts the Twingate client and connects to `inlumi.twingate.com`
+1. Auto-elevates to admin via UAC (required for device removal and registry access)
+2. Scans for ghost Twingate network adapters (status not OK) and removes them via `pnputil`
+3. Deletes all Twingate network profiles from the registry (`HKLM:\...\NetworkList\Profiles`)
 
 ## Requirements
 
