@@ -7,7 +7,7 @@
     Step 3: Execute Remove-Twingate-Cleanup.ps1 as administrator
     Step 4: Reboot (script resumes automatically after logon)
     Step 5: Download and install Twingate silently, configure to join inlumi.twingate.com
-    Step 6: Reboot when the Twingate installer asks for it
+    Step 6: Reboot computer
 .NOTES
     Must be run as administrator. The script self-elevates if needed.
     After the reboot in step 4, a scheduled task re-launches this script to continue at step 5.
@@ -87,13 +87,11 @@ if ($PostReboot) {
     # Clean up installer
     Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
 
-    # ── Step 6: Reboot when the installer asks for it ────────────────────
+    # ── Step 6: Reboot ────────────────────────────────────────────────────
     Write-Step -Number 6 -Title "Reboot computer"
 
-    Write-Host "The Twingate installer requires a reboot to complete." -ForegroundColor Yellow
-    Write-Host "Please click 'Restart' when the Twingate installer prompts you." -ForegroundColor Yellow
-    Write-Host "`nIf no prompt appeared, press Enter to reboot now..." -ForegroundColor DarkGray
-    Read-Host | Out-Null
+    Write-Host "Rebooting to complete the installation..." -ForegroundColor Yellow
+    Start-Sleep -Seconds 15
     Restart-Computer -Force
 }
 
