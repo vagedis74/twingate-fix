@@ -42,8 +42,8 @@ if ($RemoveInstanceIds) {
     Start-Process "C:\Program Files\Twingate\Twingate.exe"
     Start-Sleep -Seconds 3
 
-    for ($i = 1; $i -le 5; $i++) {
-        Write-Host "Connection attempt $i of 5..." -ForegroundColor Cyan
+    for ($i = 1; $i -le 1; $i++) {
+        Write-Host "Connection attempt $i of 1..." -ForegroundColor Cyan
         Start-Process "twingate://connect?network=inlumi.twingate.com"
         Start-Sleep -Seconds 15
 
@@ -56,7 +56,7 @@ if ($RemoveInstanceIds) {
         }
     }
 
-    Write-Host "`nCould not verify connection after 5 attempts." -ForegroundColor Red
+    Write-Host "`nCould not verify connection after 1 attempt." -ForegroundColor Red
     Write-Host "A reboot may be required to fix the Twingate adapter.`n" -ForegroundColor Yellow
     try {
         Write-Host "Press Space to reboot now, or close this window to cancel..." -ForegroundColor DarkGray
@@ -174,8 +174,8 @@ if (-not $ghostAdapters -or $ghostAdapters.Count -eq 0) {
         Start-Process "C:\Program Files\Twingate\Twingate.exe"
         Start-Sleep -Seconds 3
 
-        for ($i = 1; $i -le 5; $i++) {
-            Write-Host "Connection attempt $i of 5..." -ForegroundColor Cyan
+        for ($i = 1; $i -le 1; $i++) {
+            Write-Host "Connection attempt $i of 1..." -ForegroundColor Cyan
             Start-Process "twingate://connect?network=inlumi.twingate.com"
             Start-Sleep -Seconds 15
 
@@ -187,7 +187,7 @@ if (-not $ghostAdapters -or $ghostAdapters.Count -eq 0) {
             }
         }
 
-        Write-Host "`nCould not verify connection after 5 attempts." -ForegroundColor Red
+        Write-Host "`nCould not verify connection after 1 attempt." -ForegroundColor Red
         Write-Host "A reboot may be required to fix the Twingate adapter.`n" -ForegroundColor Yellow
         try {
             Write-Host "Press Space to reboot now, or close this window to cancel..." -ForegroundColor DarkGray
