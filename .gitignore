@@ -1,4 +1,7 @@
 *.log
 *.tmp
+*.docx
+~$*
+nul
 desktop.ini
 Thumbs.db
