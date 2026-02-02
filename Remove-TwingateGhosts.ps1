@@ -52,10 +52,10 @@ function Clean-TwingateProfiles {
 # Scan for ghost Twingate adapters
 Write-Host "`nScanning for ghost Twingate network adapters..." -ForegroundColor Cyan
 
-$ghostAdapters = Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
-    Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -ne "OK" }
+$ghostAdapters = @(Get-PnpDevice -Class Net -ErrorAction SilentlyContinue |
+    Where-Object { $_.FriendlyName -like "*Twingate*" -and $_.Status -ne "OK" })
 
-if (-not $ghostAdapters) {
+if ($ghostAdapters.Count -eq 0) {
     Write-Host "No ghost Twingate adapters found.`n" -ForegroundColor Green
     Clean-TwingateProfiles -Label "Checking"
     Write-Host "`nExiting in 5 seconds..." -ForegroundColor DarkGray

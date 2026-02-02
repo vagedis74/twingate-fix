@@ -104,7 +104,12 @@ if (Test-Path $cleanupScript) {
     $proc = Start-Process powershell -ArgumentList @(
         "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
     ) -PassThru -Wait
-    Write-Host "Cleanup script finished (exit code $($proc.ExitCode))." -ForegroundColor Green
+    if ($proc.ExitCode -ne 0) {
+        Write-Host "Cleanup script failed (exit code $($proc.ExitCode))." -ForegroundColor Red
+        Start-Sleep -Seconds 5
+        exit 1
+    }
+    Write-Host "Cleanup script finished successfully." -ForegroundColor Green
 } else {
     Write-Host "ERROR: Could not find '$cleanupScript'" -ForegroundColor Red
     Write-Host "Make sure Remove-TwingateGhosts.ps1 is in the same folder as this script." -ForegroundColor Yellow
@@ -160,9 +165,13 @@ if ($PostReboot) {
     Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
         $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
         if ($props.ProfileName -like "Twingate*") {
-            Remove-Item $_.PSPath -Recurse -Force
-            Write-Host "  Deleted profile '$($props.ProfileName)'" -ForegroundColor DarkGray
-            $deleted++
+            try {
+                Remove-Item $_.PSPath -Recurse -Force -ErrorAction Stop
+                Write-Host "  Deleted profile '$($props.ProfileName)'" -ForegroundColor DarkGray
+                $deleted++
+            } catch {
+                Write-Host "  Failed to delete profile '$($props.ProfileName)': $_" -ForegroundColor Red
+            }
         }
     }
     if ($deleted -eq 0) {
@@ -282,7 +291,11 @@ if ($PostInstallReboot) {
         $proc = Start-Process powershell -ArgumentList @(
             "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
         ) -PassThru -Wait
-        Write-Host "Cleanup script finished (exit code $($proc.ExitCode))." -ForegroundColor Green
+        if ($proc.ExitCode -ne 0) {
+            Write-Host "Cleanup script failed (exit code $($proc.ExitCode))." -ForegroundColor Red
+        } else {
+            Write-Host "Cleanup script finished successfully." -ForegroundColor Green
+        }
     } else {
         Write-Host "ERROR: Could not find '$cleanupScript'" -ForegroundColor Red
         Write-Host "Make sure Remove-TwingateGhosts.ps1 is in the same folder as this script." -ForegroundColor Yellow
