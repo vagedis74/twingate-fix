@@ -152,6 +152,26 @@ if ($PostReboot) {
     # -- Step 5: Download, install and configure Twingate ------------------
     Write-Step -Number 5 -Title "Download and install Twingate silently"
 
+    # Wait for network connectivity before downloading
+    Write-Host "Waiting for network connectivity..." -ForegroundColor Yellow
+    $maxAttempts = 30
+    $attempt = 0
+    while ($attempt -lt $maxAttempts) {
+        $attempt++
+        try {
+            $null = Invoke-WebRequest -Uri "https://api.twingate.com" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            Write-Host "Network is available." -ForegroundColor Green
+            break
+        } catch {
+            if ($attempt -ge $maxAttempts) {
+                Write-Host "Network not available after $maxAttempts attempts. Aborting." -ForegroundColor Red
+                exit 1
+            }
+            Write-Host "  Attempt $attempt/$maxAttempts - waiting 10 seconds..." -ForegroundColor DarkGray
+            Start-Sleep -Seconds 10
+        }
+    }
+
     $installerUrl  = "https://api.twingate.com/download/windows"
     $installerPath = "$env:USERPROFILE\Downloads\TwingateWindowsInstaller.exe"
 

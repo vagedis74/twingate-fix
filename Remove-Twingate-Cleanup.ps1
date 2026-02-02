@@ -31,7 +31,7 @@ if (-not $ghostAdapters) {
     $deleted = 0
     Get-ChildItem $profilesPath | ForEach-Object {
         $props = Get-ItemProperty $_.PSPath
-        if ($props.ProfileName -match '^Twingate \d+$') {
+        if ($props.ProfileName -like "Twingate*" -and $props.ProfileName -ne "Twingate") {
             Remove-Item $_.PSPath -Recurse -Force
             Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
             $deleted++
@@ -101,7 +101,7 @@ if ($activeProfile -and $activeProfile.Name -ne "Twingate") {
 $deleted = 0
 Get-ChildItem $profilesPath | ForEach-Object {
     $props = Get-ItemProperty $_.PSPath
-    if ($props.ProfileName -match '^Twingate \d+$') {
+    if ($props.ProfileName -like "Twingate*" -and $props.ProfileName -ne "Twingate") {
         Remove-Item $_.PSPath -Recurse -Force
         Write-Host "  Deleted stale profile '$($props.ProfileName)'" -ForegroundColor DarkGray
         $deleted++
