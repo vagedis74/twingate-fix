@@ -4,12 +4,12 @@
 .DESCRIPTION
     Step 1: Quit the Twingate client
     Step 2: Uninstall Twingate
-    Step 3: Execute Remove-Twingate-Cleanup.ps1 as administrator
+    Step 3: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
     Step 4: Reboot (script resumes automatically after logon)
     Step 5: Download and install Twingate silently, configure to join inlumi.twingate.com
     Step 6: Reboot computer
     Step 7: Trigger Intune sync so the device becomes trusted
-    Step 8: Execute Remove-Twingate-Cleanup.ps1 as administrator to clean up ghost adapters
+    Step 8: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
 .NOTES
     Must be run as administrator. The script self-elevates if needed.
     After the reboot in step 4, a scheduled task re-launches this script to continue at step 5.
@@ -95,19 +95,19 @@ if ($twingateApp) {
 Wait-Continue
 
 # -- Step 3: Execute cleanup script --------------------------------------------
-Write-Step -Number 3 -Title "Execute Remove-Twingate-Cleanup.ps1"
+Write-Step -Number 3 -Title "Execute Remove-TwingateGhosts.ps1"
 
-$cleanupScript = Join-Path $PSScriptRoot "Remove-Twingate-Cleanup.ps1"
+$cleanupScript = Join-Path $PSScriptRoot "Remove-TwingateGhosts.ps1"
 
 if (Test-Path $cleanupScript) {
-    Write-Host "Launching Remove-Twingate-Cleanup.ps1 as Administrator..." -ForegroundColor Yellow
-    $proc = Start-Process powershell -Verb RunAs -ArgumentList @(
+    Write-Host "Launching Remove-TwingateGhosts.ps1..." -ForegroundColor Yellow
+    $proc = Start-Process powershell -ArgumentList @(
         "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
     ) -PassThru -Wait
     Write-Host "Cleanup script finished (exit code $($proc.ExitCode))." -ForegroundColor Green
 } else {
     Write-Host "ERROR: Could not find '$cleanupScript'" -ForegroundColor Red
-    Write-Host "Make sure Remove-Twingate-Cleanup.ps1 is in the same folder as this script." -ForegroundColor Yellow
+    Write-Host "Make sure Remove-TwingateGhosts.ps1 is in the same folder as this script." -ForegroundColor Yellow
     Start-Sleep -Seconds 5
     exit 1
 }
@@ -273,19 +273,19 @@ if ($PostInstallReboot) {
     Wait-Continue
 
     # -- Step 8: Execute cleanup script ---------------------------------------
-    Write-Step -Number 8 -Title "Execute Remove-Twingate-Cleanup.ps1"
+    Write-Step -Number 8 -Title "Execute Remove-TwingateGhosts.ps1"
 
-    $cleanupScript = Join-Path $PSScriptRoot "Remove-Twingate-Cleanup.ps1"
+    $cleanupScript = Join-Path $PSScriptRoot "Remove-TwingateGhosts.ps1"
 
     if (Test-Path $cleanupScript) {
-        Write-Host "Launching Remove-Twingate-Cleanup.ps1 as Administrator..." -ForegroundColor Yellow
-        $proc = Start-Process powershell -Verb RunAs -ArgumentList @(
+        Write-Host "Launching Remove-TwingateGhosts.ps1..." -ForegroundColor Yellow
+        $proc = Start-Process powershell -ArgumentList @(
             "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
         ) -PassThru -Wait
         Write-Host "Cleanup script finished (exit code $($proc.ExitCode))." -ForegroundColor Green
     } else {
         Write-Host "ERROR: Could not find '$cleanupScript'" -ForegroundColor Red
-        Write-Host "Make sure Remove-Twingate-Cleanup.ps1 is in the same folder as this script." -ForegroundColor Yellow
+        Write-Host "Make sure Remove-TwingateGhosts.ps1 is in the same folder as this script." -ForegroundColor Yellow
     }
 
     Write-Host "`nTwingate fix complete!" -ForegroundColor Green

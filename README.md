@@ -22,10 +22,6 @@ Removes ghost adapters and stale network profiles without reinstalling. Requires
 powershell -ExecutionPolicy Bypass -File Remove-TwingateGhosts.ps1
 ```
 
-### Remove-Twingate-Cleanup.ps1
-
-Same as above, but intended to be called by `fix_twingate.ps1` rather than run directly.
-
 ## Requirements
 
 - Windows 10 / Windows 11 / Windows Server 2016+

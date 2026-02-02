@@ -43,12 +43,9 @@ The reboot-resume mechanism works as follows:
 
 The blocks are ordered chronologically in the file (Steps 1-4, then 5-6, then 7-8). The main path is guarded by `if (-not $PostReboot -and -not $PostInstallReboot)`, so only one block executes per invocation.
 
-### Standalone cleanup scripts
+### Remove-TwingateGhosts.ps1 — Cleanup script
 
-Two scripts exist with overlapping functionality (ghost adapter removal + network profile cleanup):
-
-- **Remove-Twingate-Cleanup.ps1** — Called by `fix_twingate.ps1` in steps 3 and 8. Does NOT self-elevate (expects caller to provide admin context). Inline profile cleanup logic (duplicated in two code paths: no-ghosts early exit and post-removal).
-- **Remove-TwingateGhosts.ps1** — Standalone version. Warns if not admin but does not self-elevate. Uses `Clean-TwingateProfiles` helper function to avoid duplication. Deletes stale `Twingate*` profiles, preserves/renames the active one.
+Called by `fix_twingate.ps1` in steps 3 and 8, and can also be run standalone. Warns if not admin but does not self-elevate. Uses `Clean-TwingateProfiles` helper function. Deletes stale `Twingate*` profiles, preserves/renames the active one.
 
 ### Profile cleanup behavior differences
 

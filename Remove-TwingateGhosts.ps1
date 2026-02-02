@@ -100,3 +100,4 @@ Clean-TwingateProfiles -Label "Cleaning up"
 
 Write-Host "Exiting in 5 seconds..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 5
+exit 0
