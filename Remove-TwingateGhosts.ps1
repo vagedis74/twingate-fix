@@ -36,6 +36,26 @@ function Clean-TwingateProfiles {
         }
     }
 
+    # Export all Twingate profiles before deletion
+    $exportPath = "$env:USERPROFILE\Downloads\TwingateProfile.reg"
+    $exported   = $false
+    Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        if ($props.ProfileName -like "Twingate*") {
+            $regKey = $_.Name
+            & reg.exe export $regKey $exportPath /y 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  Exported profile '$($props.ProfileName)' to $exportPath" -ForegroundColor Green
+                $exported = $true
+            } else {
+                Write-Host "  Failed to export profile '$($props.ProfileName)'." -ForegroundColor Red
+            }
+        }
+    }
+    if (-not $exported) {
+        Write-Host "  No Twingate profiles found to export." -ForegroundColor Yellow
+    }
+
     $deleted = 0
     Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
         $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue

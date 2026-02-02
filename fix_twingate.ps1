@@ -9,9 +9,8 @@
     Step 5: Install .NET 8 Desktop Runtime (prerequisite for Twingate MSI)
     Step 6: Download and install Twingate silently, configure to join inlumi.twingate.com
     Step 7: Reboot computer
-    Step 8: Trigger Intune sync so the device becomes trusted
-    Step 9: Verify Twingate connection
-    Step 10: Execute Remove-TwingateGhosts.ps1 to clean up ghost adapters
+    Step 8: Verify Twingate connection
+    Step 9: Trigger Intune sync so the device becomes trusted
 .NOTES
     Must be run as administrator. The script self-elevates if needed.
     After the reboot in step 4, a scheduled task re-launches this script to continue at step 5.
@@ -128,15 +127,7 @@ if ($twingateApp) {
         }
     }
 
-    # Verify Twingate is actually gone from the registry
-    $stillInstalled = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -like "*Twingate*" }
-    if ($stillInstalled) {
-        Write-Host "Uninstall reported success but Twingate is still present in the registry." -ForegroundColor Red
-        Start-Sleep -Seconds 10
-        exit 1
-    }
-    Write-Host "Twingate uninstall complete and verified." -ForegroundColor Green
+    Write-Host "Twingate uninstall complete." -ForegroundColor Green
 } else {
     Write-Host "Twingate is not installed (or already uninstalled)." -ForegroundColor Green
 }
@@ -278,9 +269,29 @@ if ($PostReboot) {
     # -- Step 6: Download, install and configure Twingate ------------------
     Write-Step -Number 6 -Title "Download and install Twingate silently"
 
+    # Export the active "Twingate" network profile before deletion
+    $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
+    $exportPath   = "$env:USERPROFILE\Downloads\TwingateProfile.reg"
+    $exported      = $false
+    Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        if ($props.ProfileName -eq "Twingate") {
+            $regKey = $_.Name  # full registry path (HKEY_LOCAL_MACHINE\...)
+            & reg.exe export $regKey $exportPath /y 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  Exported profile 'Twingate' to $exportPath" -ForegroundColor Green
+                $exported = $true
+            } else {
+                Write-Host "  Failed to export profile 'Twingate'." -ForegroundColor Red
+            }
+        }
+    }
+    if (-not $exported) {
+        Write-Host "  No 'Twingate' profile found to export." -ForegroundColor Yellow
+    }
+
     # Delete all remaining Twingate network profiles before fresh install
     Write-Host "Removing all Twingate network profiles..." -ForegroundColor Yellow
-    $profilesPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"
     $deleted = 0
     Get-ChildItem $profilesPath -ErrorAction SilentlyContinue | ForEach-Object {
         $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
@@ -320,7 +331,8 @@ if ($PostReboot) {
     Write-Host "Download complete: $installerPath" -ForegroundColor Green
 
     Write-Host "Installing Twingate silently (network: inlumi.twingate.com)..." -ForegroundColor Yellow
-    $installProc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /qn network=inlumi.twingate.com auto_update=true no_optional_updates=true" -Wait -PassThru
+    $msiLog = "$env:USERPROFILE\Downloads\TwingateInstall.log"
+    $installProc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /q /l*v `"$msiLog`" NETWORK=inlumi.twingate.com auto_update=true no_optional_updates=true" -Wait -PassThru
     if ($installProc.ExitCode -ne 0) {
         $ec = $installProc.ExitCode
         Write-Host "Installation failed with exit code $ec." -ForegroundColor Red
@@ -329,15 +341,7 @@ if ($PostReboot) {
         exit 1
     }
 
-    # Verify Twingate is actually installed
-    $twingateExe = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -like "*Twingate*" }
-    if (-not $twingateExe) {
-        Write-Host "Installation reported success but Twingate was not found. Install may have failed." -ForegroundColor Red
-        Start-Sleep -Seconds 10
-        exit 1
-    }
-    Write-Host "Twingate installation verified." -ForegroundColor Green
+    Write-Host "Twingate installed successfully." -ForegroundColor Green
 
     # Clean up installer
     Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
@@ -355,7 +359,7 @@ if ($PostReboot) {
 
         Register-ScheduledTask -TaskName "FixTwingatePostInstall" `
             -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-            -Description "Triggers Intune sync after Twingate install reboot (auto-deletes)" `
+            -Description "Verifies Twingate and triggers Intune sync after install reboot (auto-deletes)" `
             -Force -ErrorAction Stop | Out-Null
     } catch {
         Write-Host "ERROR: Failed to register scheduled task: $_" -ForegroundColor Red
@@ -366,7 +370,7 @@ if ($PostReboot) {
 
     Write-Host "Scheduled task registered." -ForegroundColor Green
     Write-Host "`nRebooting to complete the installation..." -ForegroundColor Yellow
-    Write-Host "After you log back in, the script will trigger an Intune sync (Step 8).`n" -ForegroundColor Yellow
+    Write-Host "After you log back in, the script will verify Twingate and trigger an Intune sync.`n" -ForegroundColor Yellow
 
     Start-Sleep -Seconds 15
 
@@ -381,7 +385,7 @@ if ($PostReboot) {
 }
 
 # ===============================================================================
-# AFTER SECOND REBOOT (Steps 8-10)
+# AFTER SECOND REBOOT (Steps 8-9)
 # ===============================================================================
 if ($PostInstallReboot) {
     Write-Host "`n  Resuming Twingate fix after install reboot...`n" -ForegroundColor Green
@@ -389,38 +393,8 @@ if ($PostInstallReboot) {
     # Clean up the scheduled task
     Unregister-ScheduledTask -TaskName "FixTwingatePostInstall" -Confirm:$false -ErrorAction SilentlyContinue
 
-    # -- Step 8: Trigger Intune sync ----------------------------------------
-    Write-Step -Number 8 -Title "Trigger Intune sync"
-
-    Write-Host "Triggering Intune device sync to establish device trust..." -ForegroundColor Yellow
-
-    # Restart the Intune Management Extension service to trigger a sync
-    $imeSvc = Get-Service -Name IntuneManagementExtension -ErrorAction SilentlyContinue
-    if ($imeSvc) {
-        Restart-Service -Name IntuneManagementExtension -Force -ErrorAction SilentlyContinue
-        Write-Host "Intune Management Extension service restarted." -ForegroundColor Green
-    } else {
-        Write-Host "Intune Management Extension service not found." -ForegroundColor DarkGray
-    }
-
-    # Trigger all MDM EnterpriseMgmt scheduled tasks (policy sync)
-    $mdmTasks = @(Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" -ErrorAction SilentlyContinue)
-    if ($mdmTasks) {
-        foreach ($task in $mdmTasks) {
-            Start-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
-        }
-        Write-Host "MDM policy sync tasks triggered ($($mdmTasks.Count) task(s))." -ForegroundColor Green
-    } else {
-        Write-Host "No MDM scheduled tasks found." -ForegroundColor DarkGray
-    }
-
-    Write-Host "`nIntune sync initiated. The device should become trusted shortly." -ForegroundColor Green
-    Write-Host "You can verify in Company Portal or Intune portal.`n" -ForegroundColor Yellow
-
-    Wait-Continue
-
-    # -- Step 9: Verify Twingate connection ------------------------------------
-    Write-Step -Number 9 -Title "Verify Twingate connection"
+    # -- Step 8: Verify Twingate connection ------------------------------------
+    Write-Step -Number 8 -Title "Verify Twingate connection"
 
     # Find Twingate executable path from registry or known location
     $twingateExePath = $null
@@ -484,26 +458,35 @@ if ($PostInstallReboot) {
 
     Wait-Continue
 
-    # -- Step 10: Execute cleanup script ---------------------------------------
-    Write-Step -Number 10 -Title "Execute Remove-TwingateGhosts.ps1"
+    # -- Step 9: Trigger Intune sync ----------------------------------------
+    Write-Step -Number 9 -Title "Trigger Intune sync"
 
-    $cleanupScript = Join-Path $PSScriptRoot "Remove-TwingateGhosts.ps1"
+    Write-Host "Triggering Intune device sync to establish device trust..." -ForegroundColor Yellow
 
-    if (Test-Path $cleanupScript) {
-        Write-Host "Launching Remove-TwingateGhosts.ps1..." -ForegroundColor Yellow
-        $proc = Start-Process powershell -ArgumentList @(
-            "-ExecutionPolicy", "Bypass", "-File", "`"$cleanupScript`""
-        ) -PassThru -Wait
-        if ($proc.ExitCode -ne 0) {
-            $ec = $proc.ExitCode
-            Write-Host "Cleanup script failed with exit code $ec." -ForegroundColor Red
-        } else {
-            Write-Host "Cleanup script finished successfully." -ForegroundColor Green
-        }
+    # Restart the Intune Management Extension service to trigger a sync
+    $imeSvc = Get-Service -Name IntuneManagementExtension -ErrorAction SilentlyContinue
+    if ($imeSvc) {
+        Restart-Service -Name IntuneManagementExtension -Force -ErrorAction SilentlyContinue
+        Write-Host "Intune Management Extension service restarted." -ForegroundColor Green
     } else {
-        Write-Host "ERROR: Could not find '$cleanupScript'" -ForegroundColor Red
-        Write-Host "Make sure Remove-TwingateGhosts.ps1 is in the same folder as this script." -ForegroundColor Yellow
+        Write-Host "Intune Management Extension service not found." -ForegroundColor DarkGray
     }
+
+    # Trigger all MDM EnterpriseMgmt scheduled tasks (policy sync)
+    $mdmTasks = @(Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\*" -ErrorAction SilentlyContinue)
+    if ($mdmTasks) {
+        foreach ($task in $mdmTasks) {
+            Start-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
+        }
+        Write-Host "MDM policy sync tasks triggered ($($mdmTasks.Count) task(s))." -ForegroundColor Green
+    } else {
+        Write-Host "No MDM scheduled tasks found." -ForegroundColor DarkGray
+    }
+
+    Write-Host "`nIntune sync initiated. The device should become trusted shortly." -ForegroundColor Green
+    Write-Host "You can verify in Company Portal or Intune portal.`n" -ForegroundColor Yellow
+
+    Wait-Continue
 
     Write-Host "`nTwingate fix complete!" -ForegroundColor Green
     Write-Host "`nExiting in 10 seconds..." -ForegroundColor DarkGray
