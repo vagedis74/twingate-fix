@@ -60,6 +60,10 @@ A simpler alternative to `fix_twingate.ps1` that completes in a single run with 
 | 5 | Install Twingate from local `TwingateWindowsInstaller.exe` (silent, `NETWORK=inlumi.twingate.com`) |
 | 6 | Reboot the computer |
 
+### Remove-TwingateStaleProfiles.ps1 — Interactive stale profile cleanup
+
+Standalone script that deletes `Twingate*` network profiles from the registry while preserving the one named exactly `"Twingate"`. Shows the active `"Twingate"` profile as kept when present, lists the stale profiles found, and prompts for confirmation (`Y/N`) before deleting. Requires administrator privileges (`#Requires -RunAsAdministrator`).
+
 ### New-TwingateGhostAdapter.ps1 — Test utility
 
 Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGhosts.ps1`. Uses the Windows SetupDi API (P/Invoke) to register a root-enumerated device in the Net class named "Twingate Virtual Adapter", then disables it via `pnputil /disable-device` so it appears with `Status=Error`. Accepts a `-Count` parameter to create multiple ghosts. Does not self-elevate.
@@ -69,6 +73,7 @@ Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGh
 - **fix_twingate.ps1 Step 6**: Exports the active "Twingate" profile to `.reg`, then deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
 - **Reinstall-Twingate.ps1 Step 4**: Deletes ALL `Twingate*` profiles (no export) before fresh install.
 - **Remove-TwingateGhosts.ps1**: Exports profiles to `.reg`, preserves the active Twingate profile (renames it to "Twingate" if needed), only deletes stale ones (`Twingate*` where name != "Twingate").
+- **Remove-TwingateStaleProfiles.ps1**: Interactive — lists stale profiles, prompts for confirmation, then deletes `Twingate*` profiles where name != "Twingate" (no export).
 
 ## Error Handling Patterns
 
