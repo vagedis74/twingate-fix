@@ -78,8 +78,8 @@ Interactive script that configures `Twingate.Service` to start only when network
 
 | Action | What it does |
 |--------|-------------|
-| **Implement** | Adds `start/networkon` trigger via `sc.exe triggerinfo`, adds `NlaSvc` dependency via `sc.exe config`, deploys `C:\twingate_logs\Test-TwingateInternet.ps1` helper script, registers `TwingateInternetCheck` scheduled task (runs as SYSTEM at startup) that logs internet connectivity before Twingate starts |
-| **Revert** | Removes the service trigger and NlaSvc dependency, unregisters the `TwingateInternetCheck` scheduled task, deletes the helper script |
+| **Implement** | Sets startup type to Manual via `sc.exe config start= demand`, adds `start/networkon` trigger via `sc.exe triggerinfo`, adds `NlaSvc` dependency via `sc.exe config`, deploys `C:\twingate_logs\Test-TwingateInternet.ps1` helper script, registers `TwingateInternetCheck` scheduled task (runs as SYSTEM at startup) that logs internet connectivity before Twingate starts |
+| **Revert** | Restores startup type to Automatic via `sc.exe config start= auto`, removes the service trigger and NlaSvc dependency, unregisters the `TwingateInternetCheck` scheduled task, deletes the helper script |
 
 The startup internet-check helper produces a timestamped `TwingateInternetCheck_<timestamp>.log` in `C:\twingate_logs\` at every boot, recording computer name, user, Twingate service status, and internet connectivity test result.
 

@@ -9,13 +9,15 @@
     configuration. Logs all actions to C:\twingate_logs\Set-TwingateServiceTrigger_<timestamp>.log.
     Tests internet connectivity (via msftconnecttest.com) before any changes.
 
-    Implement: Adds start/networkon trigger via sc.exe triggerinfo, adds NlaSvc
-    dependency via sc.exe config, deploys C:\twingate_logs\Test-TwingateInternet.ps1
-    helper script, registers TwingateInternetCheck scheduled task (runs as SYSTEM at
-    startup) that logs internet connectivity before Twingate starts.
+    Implement: Sets startup type to Manual, adds start/networkon trigger via sc.exe
+    triggerinfo, adds NlaSvc dependency via sc.exe config, deploys
+    C:\twingate_logs\Test-TwingateInternet.ps1 helper script, registers
+    TwingateInternetCheck scheduled task (runs as SYSTEM at startup) that logs internet
+    connectivity before Twingate starts.
 
-    Revert: Removes the service trigger and NlaSvc dependency, unregisters the
-    TwingateInternetCheck scheduled task, deletes the helper script.
+    Revert: Restores startup type to Automatic, removes the service trigger and NlaSvc
+    dependency, unregisters the TwingateInternetCheck scheduled task, deletes the helper
+    script.
 
     The startup internet-check helper produces a timestamped
     TwingateInternetCheck_<timestamp>.log in C:\twingate_logs\ at every boot,
@@ -100,6 +102,15 @@ if ($action -in @('I', 'i')) {
         Write-Log "  Failed to set service dependency (exit code $LASTEXITCODE)." -Color Red
     }
 
+    # --- Set startup type to Manual ---
+    Write-Log "Setting service startup type to Manual..." -Color Cyan
+    & sc.exe config "Twingate.Service" start= demand 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Log "  Service startup type set to Manual." -Color Green
+    } else {
+        Write-Log "  Failed to set service startup type (exit code $LASTEXITCODE)." -Color Red
+    }
+
     # --- Deploy startup internet-check logging script ---
     Write-Log "Deploying internet-check logging script: $helperScript" -Color Cyan
     $helperContent = @'
@@ -162,6 +173,15 @@ if (-not $internetOk) {
         Write-Log "  No triggers found (already removed)." -Color Yellow
     } else {
         Write-Log "  Failed to remove service triggers (exit code $LASTEXITCODE)." -Color Red
+    }
+
+    # --- Restore startup type to Automatic ---
+    Write-Log "Restoring service startup type to Automatic..." -Color Cyan
+    & sc.exe config "Twingate.Service" start= auto 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Log "  Service startup type restored to Automatic." -Color Green
+    } else {
+        Write-Log "  Failed to restore service startup type (exit code $LASTEXITCODE)." -Color Red
     }
 
     # --- Remove NlaSvc dependency ---
