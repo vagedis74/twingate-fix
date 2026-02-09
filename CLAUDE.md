@@ -62,7 +62,11 @@ A simpler alternative to `fix_twingate.ps1` that completes in a single run with 
 
 ### Remove-TwingateStaleProfiles.ps1 — Interactive stale profile cleanup
 
-Standalone script that deletes `Twingate*` network profiles from the registry while preserving the one named exactly `"Twingate"`. Shows the active `"Twingate"` profile as kept when present, lists the stale profiles found, and prompts for confirmation (`Y/N`) before deleting. Requires administrator privileges (`#Requires -RunAsAdministrator`).
+Standalone script that deletes stale `Twingate*` network profiles from the registry, preserving only the profile whose GUID matches the active Twingate connection's `InstanceID` (from `Get-NetConnectionProfile`). Exports the active profile to `.reg` if it exists in the registry, lists stale profiles with their GUIDs, and prompts for confirmation (`Y/N`) before deleting. Requires administrator privileges (`#Requires -RunAsAdministrator`).
+
+### Get-TwingateProfiles.ps1 — Read-only profile diagnostic
+
+Lists all `Twingate*` network profiles in the registry and tags each as `[ACTIVE CONNECTION]` or `[STALE]` based on GUID matching against `Get-NetConnectionProfile.InstanceID`. Shows the Twingate service state, the active connection's InstanceID, and a summary with counts. Does not modify or delete anything. Requires administrator privileges (`#Requires -RunAsAdministrator`).
 
 ### New-TwingateGhostAdapter.ps1 — Test utility
 
@@ -73,7 +77,8 @@ Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGh
 - **fix_twingate.ps1 Step 6**: Exports the active "Twingate" profile to `.reg`, then deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
 - **Reinstall-Twingate.ps1 Step 4**: Deletes ALL `Twingate*` profiles (no export) before fresh install.
 - **Remove-TwingateGhosts.ps1**: Exports profiles to `.reg`, preserves the active Twingate profile (renames it to "Twingate" if needed), only deletes stale ones (`Twingate*` where name != "Twingate").
-- **Remove-TwingateStaleProfiles.ps1**: Interactive — lists stale profiles, prompts for confirmation, then deletes `Twingate*` profiles where name != "Twingate" (no export).
+- **Remove-TwingateStaleProfiles.ps1**: Interactive — uses GUID-based matching (`Get-NetConnectionProfile.InstanceID`) to identify the active profile, exports it if present in registry, prompts for confirmation, then deletes all other `Twingate*` profiles.
+- **Get-TwingateProfiles.ps1**: Read-only diagnostic — uses GUID-based matching to tag each registry profile as active or stale. No modifications.
 
 ## Error Handling Patterns
 
@@ -94,4 +99,5 @@ Steps that are best-effort by design (Intune sync in Step 8, connectivity verifi
 - Intune sync is triggered by restarting the `IntuneManagementExtension` service and running MDM `EnterpriseMgmt` scheduled tasks
 - Ghost adapters are detected via `Get-PnpDevice -Class Net` where Status != "OK", removed via `pnputil /remove-device`
 - Network profiles live in `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles`
+- Active profile identification uses GUID-based matching: `Get-NetConnectionProfile.InstanceID` is compared against registry key names (GUIDs) rather than `ProfileName`, because multiple profiles can share the same name (e.g. all named "Twingate") and the active connection's GUID may not even exist in the registry
 - Post-download validation checks both file existence and non-zero size before attempting install
