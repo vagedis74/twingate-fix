@@ -4,9 +4,23 @@
     Configures the Twingate service to start only when network connectivity is available.
 
 .DESCRIPTION
-    Adds a network availability trigger and NlaSvc dependency to "Twingate.Service"
-    so Windows will not start the service until IP connectivity is established.
-    Logs all output to C:\twingate_logs\Set-TwingateServiceTrigger_<timestamp>.log.
+    Interactive script that configures "Twingate.Service" to start only when network
+    connectivity is available. Prompts the user to (I)mplement or (R)evert the
+    configuration. Logs all actions to C:\twingate_logs\Set-TwingateServiceTrigger_<timestamp>.log.
+    Tests internet connectivity (via msftconnecttest.com) before any changes.
+
+    Implement: Adds start/networkon trigger via sc.exe triggerinfo, adds NlaSvc
+    dependency via sc.exe config, deploys C:\twingate_logs\Test-TwingateInternet.ps1
+    helper script, registers TwingateInternetCheck scheduled task (runs as SYSTEM at
+    startup) that logs internet connectivity before Twingate starts.
+
+    Revert: Removes the service trigger and NlaSvc dependency, unregisters the
+    TwingateInternetCheck scheduled task, deletes the helper script.
+
+    The startup internet-check helper produces a timestamped
+    TwingateInternetCheck_<timestamp>.log in C:\twingate_logs\ at every boot,
+    recording computer name, user, Twingate service status, and internet connectivity
+    test result.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File Set-TwingateServiceTrigger.ps1
