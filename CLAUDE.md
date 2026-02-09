@@ -72,6 +72,17 @@ Lists all `Twingate*` network profiles in the registry and tags each as `[ACTIVE
 
 Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGhosts.ps1`. Uses the Windows SetupDi API (P/Invoke) to register a root-enumerated device in the Net class named "Twingate Virtual Adapter", then disables it via `pnputil /disable-device` so it appears with `Status=Error`. Accepts a `-Count` parameter to create multiple ghosts. Does not self-elevate.
 
+### Set-TwingateServiceTrigger.ps1 — Service network trigger configuration
+
+Interactive script that configures `Twingate.Service` to start only when network connectivity is available. Prompts the user to **(I)mplement** or **(R)evert** the configuration. Logs all actions to `C:\twingate_logs\Set-TwingateServiceTrigger_<timestamp>.log`. Tests internet connectivity (via `msftconnecttest.com`) before any changes. Requires administrator privileges (`#Requires -RunAsAdministrator`).
+
+| Action | What it does |
+|--------|-------------|
+| **Implement** | Adds `start/networkon` trigger via `sc.exe triggerinfo`, adds `NlaSvc` dependency via `sc.exe config`, deploys `C:\twingate_logs\Test-TwingateInternet.ps1` helper script, registers `TwingateInternetCheck` scheduled task (runs as SYSTEM at startup) that logs internet connectivity before Twingate starts |
+| **Revert** | Removes the service trigger and NlaSvc dependency, unregisters the `TwingateInternetCheck` scheduled task, deletes the helper script |
+
+The startup internet-check helper produces a timestamped `TwingateInternetCheck_<timestamp>.log` in `C:\twingate_logs\` at every boot, recording computer name, user, Twingate service status, and internet connectivity test result.
+
 ### Profile cleanup behavior differences
 
 - **fix_twingate.ps1 Step 6**: Exports the active "Twingate" profile to `.reg`, then deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
