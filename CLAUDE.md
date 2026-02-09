@@ -45,7 +45,7 @@ The blocks are ordered chronologically in the file (Steps 1-4, then 5-7, then 8-
 
 ### Remove-TwingateGhosts.ps1 — Cleanup script
 
-Called by `fix_twingate.ps1` in step 3, and can also be run standalone. Warns if not admin but does not self-elevate. Uses `Clean-TwingateProfiles` helper function. Exports Twingate profiles to `TwingateProfile.reg` before deletion, then deletes stale `Twingate*` profiles while preserving/renaming the active one.
+Called by `fix_twingate.ps1` in step 3, and can also be run standalone. Warns if not admin but does not self-elevate. Uses `Clean-TwingateProfiles` helper function. Exports Twingate profiles to `TwingateProfile.reg` before deletion, then deletes stale `Twingate*` profiles while preserving the active one.
 
 ### Reinstall-Twingate.ps1 — Single-run reinstall
 
@@ -76,7 +76,7 @@ Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGh
 
 - **fix_twingate.ps1 Step 6**: Exports the active "Twingate" profile to `.reg`, then deletes ALL `Twingate*` profiles (including the active one) before fresh install — ensures clean slate.
 - **Reinstall-Twingate.ps1 Step 4**: Deletes ALL `Twingate*` profiles (no export) before fresh install.
-- **Remove-TwingateGhosts.ps1**: Exports profiles to `.reg`, preserves the active Twingate profile (renames it to "Twingate" if needed), only deletes stale ones (`Twingate*` where name != "Twingate").
+- **Remove-TwingateGhosts.ps1**: Exports profiles to `.reg`, preserves the active Twingate profile, only deletes stale ones (`Twingate*` where name != "Twingate").
 - **Remove-TwingateStaleProfiles.ps1**: Interactive — uses GUID-based matching (`Get-NetConnectionProfile.InstanceID`) to identify the active profile, exports it if present in registry, prompts for confirmation, then deletes all other `Twingate*` profiles.
 - **Get-TwingateProfiles.ps1**: Read-only diagnostic — uses GUID-based matching to tag each registry profile as active or stale. No modifications.
 
