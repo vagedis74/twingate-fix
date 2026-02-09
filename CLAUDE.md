@@ -72,16 +72,36 @@ Lists all `Twingate*` network profiles in the registry and tags each as `[ACTIVE
 
 Creates simulated ghost Twingate network adapters for testing `Remove-TwingateGhosts.ps1`. Uses the Windows SetupDi API (P/Invoke) to register a root-enumerated device in the Net class named "Twingate Virtual Adapter", then disables it via `pnputil /disable-device` so it appears with `Status=Error`. Accepts a `-Count` parameter to create multiple ghosts. Does not self-elevate.
 
-### Set-TwingateServiceTrigger.ps1 — Service network trigger configuration
+### Repair-TwingateConnection.ps1 — No-reboot quick-fix
 
-Interactive script that configures `Twingate.Service` to start only when network connectivity is available. Prompts the user to **(I)mplement** or **(R)evert** the configuration. Logs all actions to `C:\twingate_logs\Set-TwingateServiceTrigger_<timestamp>.log`. Tests internet connectivity (via `msftconnecttest.com`) before any changes. Requires administrator privileges (`#Requires -RunAsAdministrator`).
+Non-interactive script that force-restarts the Twingate service and client when the connection is broken. Handles the common failure mode where the service is "Running" but internally stuck (SDWAN Offline, gRPC DeadlineExceeded) and enters `StopPending` on normal restart. Force-kills the service process via WMI PID lookup, cleans up ghost adapters and stale profiles, then restarts everything. Self-elevates if not admin. Logs to `C:\twingate_logs\Repair-TwingateConnection_<timestamp>.log`.
+
+| Step | Action | Error Handling |
+|------|--------|---------------|
+| 1 | Self-elevate if not admin | exit 1 if UAC fails |
+| 2 | Setup logging | — |
+| 3 | Verify Twingate service exists | exit 1 if not installed |
+| 4 | Check internet (`msftconnecttest.com`) | warn, continue |
+| 5 | Diagnose: service status, client process, adapter, connection profile, ghost adapters, stale profiles | read-only |
+| 6 | Remove ghost adapters via `pnputil /remove-device` | log failures, continue |
+| 7 | Remove stale profiles (GUID-based, preserve active) | log failures, continue |
+| 8 | Force-stop: kill service via WMI PID, then kill all `Twingate*` processes | log failures, continue |
+| 9 | Wait for clean shutdown (3s + 5s fallback) | warn if stuck |
+| 10 | `Start-Service` | exit 1 on failure |
+| 11 | Start `Twingate.exe` (registry path lookup + fallback to Program Files) | warn if not found |
+| 12 | Poll 30s (every 5s) for: service Running, adapter Up, connection profile exists | — |
+| 13 | Print summary + log file path | warn on timeout |
+
+### Set-TwingateServiceTrigger.ps1 — Polling-based service startup
+
+Interactive script that configures `Twingate.Service` to start only when internet connectivity is confirmed. Uses a scheduled task that polls for internet rather than an SCM trigger, avoiding the problem where `sc.exe start/networkon` fires when any IP address appears on any interface before actual internet is available. Prompts the user to **(I)mplement** or **(R)evert** the configuration. Logs all actions to `C:\twingate_logs\Set-TwingateServiceTrigger_<timestamp>.log`. Tests internet connectivity (via `msftconnecttest.com`) before any changes. Requires administrator privileges (`#Requires -RunAsAdministrator`).
 
 | Action | What it does |
 |--------|-------------|
-| **Implement** | Sets startup type to Manual via `sc.exe config start= demand`, adds `start/networkon` trigger via `sc.exe triggerinfo`, adds `NlaSvc` dependency via `sc.exe config`, deploys `C:\twingate_logs\Test-TwingateInternet.ps1` helper script, registers `TwingateInternetCheck` scheduled task (runs as SYSTEM at startup) that logs internet connectivity before Twingate starts |
-| **Revert** | Restores startup type to Automatic via `sc.exe config start= auto`, removes the service trigger and NlaSvc dependency, unregisters the `TwingateInternetCheck` scheduled task, deletes the helper script |
+| **Implement** | Sets startup type to Manual via `sc.exe config start= demand`, adds `NlaSvc` dependency via `sc.exe config`, deploys `C:\twingate_logs\Test-TwingateInternet.ps1` helper script, registers `TwingateInternetCheck` scheduled task (runs as SYSTEM at startup) that polls for internet connectivity every 10 seconds (up to 5 minutes) and starts the Twingate service once confirmed |
+| **Revert** | Restores startup type to Automatic via `sc.exe config start= auto`, removes any service trigger and NlaSvc dependency, unregisters the `TwingateInternetCheck` scheduled task, deletes the helper script |
 
-The startup internet-check helper produces a timestamped `TwingateInternetCheck_<timestamp>.log` in `C:\twingate_logs\` at every boot, recording computer name, user, Twingate service status, and internet connectivity test result.
+The startup helper polls `msftconnecttest.com` every 10 seconds for up to 5 minutes. If internet is confirmed, it calls `Start-Service` to start Twingate. If the timeout is reached, the service is not started. Each run produces a timestamped `TwingateInternetCheck_<timestamp>.log` in `C:\twingate_logs\`.
 
 ### Profile cleanup behavior differences
 
@@ -89,6 +109,7 @@ The startup internet-check helper produces a timestamped `TwingateInternetCheck_
 - **Reinstall-Twingate.ps1 Step 4**: Deletes ALL `Twingate*` profiles (no export) before fresh install.
 - **Remove-TwingateGhosts.ps1**: Exports profiles to `.reg`, preserves the active Twingate profile, only deletes stale ones (`Twingate*` where name != "Twingate").
 - **Remove-TwingateStaleProfiles.ps1**: Interactive — uses GUID-based matching (`Get-NetConnectionProfile.InstanceID`) to identify the active profile, exports it if present in registry, prompts for confirmation, then deletes all other `Twingate*` profiles.
+- **Repair-TwingateConnection.ps1**: Non-interactive — uses GUID-based matching to identify the active profile, deletes all other `Twingate*` profiles automatically (no prompt, no export). Preserves the active profile.
 - **Get-TwingateProfiles.ps1**: Read-only diagnostic — uses GUID-based matching to tag each registry profile as active or stale. No modifications.
 
 ## Error Handling Patterns
